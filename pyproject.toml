@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Batch audio-to-text transcription using Vosk"
 requires-python = ">=3.12"
 dependencies = [
-    "vosk>=0.3.45",
+    "faster-whisper>=1.2.0",
 ]
 
 [project.scripts]
