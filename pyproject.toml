@@ -1,0 +1,11 @@
+[project]
+name = "audio2text"
+version = "0.1.0"
+description = "Batch audio-to-text transcription using Vosk"
+requires-python = ">=3.12"
+dependencies = [
+    "vosk>=0.3.45",
+]
+
+[project.scripts]
+audio2text = "main:main"
