@@ -1,151 +1,198 @@
-import os
-import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from datetime import datetime
-from tqdm import tqdm
-from dataclasses import dataclass
-from typing import List
+"""Суммаризация текстов: локальные seq2seq модели и LLM."""
+
+from __future__ import annotations
+
+import time
+from pathlib import Path
+
+from logger import logger
 
 
-@dataclass
-class Config:
-    input_dir: str = "results/text"
-    output_dir: str = "results/summaries"
-    model_name: str = "t-tech/T-pro-it-1.0"
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    batch_size: int = 8  # Оптимально для 3090
-    max_length: int = 200
-    min_length: int = 50
-    num_beams: int = 4
+def _detect_torch_device(preferred: str = "auto") -> str:
+    """Определяет устройство для PyTorch."""
+    if preferred not in ("auto", ""):
+        return preferred
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+    except ImportError:
+        pass
+    return "cpu"
 
 
-class TextSummarizer:
-    def __init__(self, config: Config):
-        self.config = config
-        self.tokenizer = None
-        self.model = None
-        self._init_model()
+class Summarizer:
+    """Суммаризация через seq2seq модели (MBart, T5 и т.д.)."""
 
-    def _init_model(self):
-        """Инициализация модели с обработкой ошибок"""
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name)
-            self.model = AutoModelForSeq2SeqLM.from_pretrained(self.config.model_name)
-            self.model.to(self.config.device)
-            self.model.eval()
-            torch.cuda.empty_cache()  # Очистка памяти GPU
-        except Exception as e:
-            raise RuntimeError(f"Ошибка загрузки модели: {str(e)}")
+    def __init__(self, config: dict):
+        cfg = config.get("summarization", {})
+        self.model_name: str = cfg.get("model", "Kirili4ik/mbart_ruDialogSum")
+        self.device: str = _detect_torch_device(cfg.get("device", "auto"))
+        self.max_length: int = cfg.get("max_length", 250)
+        self.min_length: int = cfg.get("min_length", 50)
+        self.num_beams: int = cfg.get("num_beams", 4)
 
-    def summarize_batch(self, texts: List[str]) -> List[str]:
-        """Суммаризация батча текстов"""
-        try:
-            inputs = self.tokenizer(
-                texts,
-                max_length=1024,
-                truncation=True,
-                padding="longest",
-                return_tensors="pt"
-            ).to(self.config.device)
+        self._tokenizer = None
+        self._model = None
 
-            with torch.no_grad():
-                summaries = self.model.generate(
-                    inputs["input_ids"],
-                    num_beams=self.config.num_beams,
-                    max_length=self.config.max_length,
-                    min_length=self.config.min_length,
-                    early_stopping=True
-                )
-
-            return [self.tokenizer.decode(s, skip_special_tokens=True) for s in summaries]
-
-        except torch.cuda.OutOfMemoryError:
-            torch.cuda.empty_cache()
-            return self._handle_oom(texts)
-
-    def _handle_oom(self, texts: List[str]) -> List[str]:
-        """Обработка нехватки памяти"""
-        print("Обнаружена нехватка памяти GPU. Уменьшаем batch size...")
-        half = len(texts) // 2
-        return (self.summarize_batch(texts[:half]) +
-                self.summarize_batch(texts[half:]))
-
-
-class FileProcessor:
-    def __init__(self, summarizer: TextSummarizer, config: Config):
-        self.summarizer = summarizer
-        self.config = config
-        os.makedirs(config.output_dir, exist_ok=True)
-
-    def get_input_files(self) -> List[str]:
-        """Получение списка файлов для обработки"""
-        return [
-            f for f in os.listdir(self.config.input_dir)
-            if f.endswith("_timed.txt")
-        ]
-
-    def process_files(self):
-        """Основной метод обработки файлов"""
-        files = self.get_input_files()
-        if not files:
-            print("Файлы для обработки не найдены!")
+    def _load_model(self):
+        """Ленивая загрузка модели."""
+        if self._model is not None:
             return
 
-        print(f"Начало обработки {len(files)} файлов на {self.config.device}...")
+        logger.info(f"Загрузка модели суммаризации: {self.model_name} (device={self.device})")
+        start = time.time()
 
-        for i in tqdm(range(0, len(files), self.config.batch_size)):
-            batch_files = files[i:i + self.config.batch_size]
-            self._process_batch(batch_files)
+        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+        import torch
 
-    def _process_batch(self, filenames: List[str]):
-        """Обработка батча файлов"""
-        try:
-            # Чтение файлов
-            texts = []
-            for filename in filenames:
-                with open(os.path.join(self.config.input_dir, filename), 'r', encoding='utf-8') as f:
-                    texts.append(f.read())
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self._model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name)
+        self._model.to(self.device)
+        self._model.eval()
 
-            # Суммаризация
-            summaries = self.summarizer.summarize_batch(texts)
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
 
-            # Сохранение результатов
-            for filename, summary in zip(filenames, summaries):
-                self._save_summary(filename, summary)
+        logger.info(f"Модель загружена за {time.time() - start:.1f} сек")
 
-        except Exception as e:
-            print(f"Ошибка при обработке батча: {str(e)}")
+    def summarize(self, text: str) -> str:
+        """Суммаризирует один текст."""
+        self._load_model()
 
-    def _save_summary(self, input_filename: str, summary: str):
-        """Сохранение результата суммаризации"""
-        base_name = os.path.splitext(input_filename)[0].replace("_timed", "")
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        output_filename = f"{base_name}_summary_{timestamp}.txt"
+        import torch
 
-        with open(os.path.join(self.config.output_dir, output_filename), 'w', encoding='utf-8') as f:
-            f.write(summary)
+        inputs = self._tokenizer(
+            text,
+            max_length=1024,
+            truncation=True,
+            return_tensors="pt",
+        ).to(self.device)
+
+        with torch.no_grad():
+            summary_ids = self._model.generate(
+                inputs["input_ids"],
+                num_beams=self.num_beams,
+                max_length=self.max_length,
+                min_length=self.min_length,
+                early_stopping=True,
+            )
+
+        return self._tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
+    def summarize_file(self, input_path: str, output_path: str | None = None) -> str:
+        """Суммаризирует текстовый файл.
+
+        Args:
+            input_path: путь к текстовому файлу.
+            output_path: путь для сохранения (None = рядом с input как _summary.txt).
+
+        Returns:
+            Текст суммаризации.
+        """
+        text = Path(input_path).read_text(encoding="utf-8")
+        logger.info(f"Суммаризация: {Path(input_path).name} ({len(text)} символов)")
+        start = time.time()
+
+        summary = self.summarize(text)
+
+        if output_path is None:
+            p = Path(input_path)
+            output_path = str(p.parent / f"{p.stem}_summary.txt")
+
+        Path(output_path).write_text(summary, encoding="utf-8")
+        logger.info(f"Суммаризация завершена за {time.time() - start:.1f} сек → {output_path}")
+        return summary
 
 
-def main():
-    # Инициализация конфига с оптимизацией под 3090
-    config = Config(
-        batch_size=16,  # Можно увеличить для 3090
-        max_length=250,
-        num_beams=6
-    )
+class LLMSummarizer:
+    """Суммаризация через LLM (локальные через mlx-lm или API)."""
 
-    # Проверка GPU
-    if config.device == "cuda":
-        print(f"Используется GPU: {torch.cuda.get_device_name(0)}")
-        print(f"VRAM доступно: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.2f} GB")
+    def __init__(self, config: dict):
+        cfg = config.get("llm", {})
+        self.provider: str = cfg.get("provider", "local")
+        self.local_model: str = cfg.get("local_model", "mlx-community/Qwen2.5-7B-Instruct-4bit")
+        self.api_model: str = cfg.get("api_model", "")
+        self.api_key: str = cfg.get("api_key", "")
+        self.api_base_url: str = cfg.get("api_base_url", "")
+        self.task: str = cfg.get("task", "summarize")
 
-    # Создание компонентов
-    summarizer = TextSummarizer(config)
-    processor = FileProcessor(summarizer, config)
+        self._mlx_model = None
+        self._mlx_tokenizer = None
 
-    # Запуск обработки
-    processor.process_files()
+    def _get_prompt(self, text: str) -> str:
+        """Формирует промпт в зависимости от задачи."""
+        prompts = {
+            "summarize": (
+                "Сделай краткое резюме этой встречи. Выдели основные темы и решения:\n\n"
+            ),
+            "format": (
+                "Отформатируй эту транскрибацию встречи в читаемый вид с абзацами и заголовками:\n\n"
+            ),
+            "extract_actions": (
+                "Извлеки из транскрибации встречи список задач (action items) "
+                "с указанием ответственного (если упоминается):\n\n"
+            ),
+        }
+        prefix = prompts.get(self.task, prompts["summarize"])
+        return prefix + text
 
+    def summarize(self, text: str) -> str:
+        """Обрабатывает текст через LLM."""
+        prompt = self._get_prompt(text)
 
-if __name__ == "__main__":
-    main()
+        if self.provider == "local":
+            return self._run_local(prompt)
+        elif self.provider == "openai":
+            return self._run_openai(prompt)
+        elif self.provider == "anthropic":
+            return self._run_anthropic(prompt)
+        else:
+            raise ValueError(f"Неизвестный LLM provider: {self.provider}")
+
+    def _run_local(self, prompt: str) -> str:
+        """Запуск через mlx-lm (Apple Silicon)."""
+        logger.info(f"LLM (mlx-lm): {self.local_model}")
+        start = time.time()
+
+        from mlx_lm import load, generate
+
+        if self._mlx_model is None:
+            logger.info(f"Загрузка модели {self.local_model}...")
+            self._mlx_model, self._mlx_tokenizer = load(self.local_model)
+
+        result = generate(
+            self._mlx_model,
+            self._mlx_tokenizer,
+            prompt=prompt,
+            max_tokens=1024,
+        )
+
+        logger.info(f"LLM завершил за {time.time() - start:.1f} сек")
+        return result
+
+    def _run_openai(self, prompt: str) -> str:
+        """Запуск через OpenAI API."""
+        from openai import OpenAI
+
+        client = OpenAI(api_key=self.api_key, base_url=self.api_base_url or None)
+        response = client.chat.completions.create(
+            model=self.api_model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
+        )
+        return response.choices[0].message.content
+
+    def _run_anthropic(self, prompt: str) -> str:
+        """Запуск через Anthropic API."""
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=self.api_key)
+        response = client.messages.create(
+            model=self.api_model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text

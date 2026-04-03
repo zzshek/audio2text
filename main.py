@@ -1,129 +1,160 @@
+"""audio2text — CLI для записи, транскрибации и диаризации встреч."""
+
+from __future__ import annotations
+
 from pathlib import Path
 
-import time
+import click
 
-from faster_whisper import WhisperModel
-
-from logger import logging
+from processor import load_config
 
 
-class FasterWhisperTranscriber:
-    """
-    Транскрибатор с использованием faster-whisper (CTranslate2)
-    Легковесный, работает offline на CPU, кроссплатформенный
-    """
-
-    def __init__(self, model_size: str = "medium", language: str = "ru"):
-        self.model_size = model_size
-        self.language = language
-
-        logging.info(f"Загрузка модели faster-whisper ({model_size})...")
-        start_time = time.time()
-        self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
-        logging.info(f"Модель загружена за {time.time() - start_time:.1f} сек")
-
-    def transcribe(self, audio_path: str) -> dict:
-        """Выполняет транскрибацию аудиофайла"""
-        try:
-            logging.info(f"Начата транскрибация {audio_path}")
-            start_time = time.time()
-
-            segments_iter, info = self.model.transcribe(
-                audio_path,
-                language=self.language,
-                beam_size=5,
-            )
-
-            segments = []
-            for seg in segments_iter:
-                segments.append({
-                    "start": seg.start,
-                    "end": seg.end,
-                    "text": seg.text.strip(),
-                })
-
-            logging.info(
-                f"Транскрибация завершена за {time.time() - start_time:.1f} сек "
-                f"(язык: {info.language}, вероятность: {info.language_probability:.2f})"
-            )
-            return {"segments": segments}
-
-        except Exception as e:
-            logging.error(f"Ошибка транскрибации: {str(e)}")
-            raise
+@click.group()
+@click.option("--config", "-c", default="config.yaml", help="Путь к конфигурации")
+@click.pass_context
+def cli(ctx, config):
+    """audio2text — запись и транскрибация встреч (Apple Silicon optimized)."""
+    ctx.ensure_object(dict)
+    ctx.obj["config"] = load_config(config)
 
 
-class AudioWorker:
-    """Оркестратор процесса транскрибации с поддержкой конвертации форматов"""
+# ── record ──────────────────────────────────────────────────────────────────
 
-    SUPPORTED_INPUT_FORMATS = ('.m4a', '.mp3', '.wav', '.ogg', '.flac')
 
-    def __init__(self, input_dir: str = "input", output_dir: str = "output"):
-        self.input_dir = Path(input_dir)
-        self.output_dir = Path(output_dir)
-        self._setup_dirs()
+@cli.command()
+@click.option("--device", "-d", type=int, default=None, help="ID аудиоустройства (см. audio2text devices)")
+@click.pass_context
+def record(ctx, device):
+    """Записать аудио с микрофона."""
+    from recorder import Recorder
 
-    def _setup_dirs(self):
-        """Создает необходимые директории"""
-        (self.output_dir / "text").mkdir(parents=True, exist_ok=True)
-        (self.output_dir / "processed").mkdir(parents=True, exist_ok=True)
+    rec = Recorder(ctx.obj["config"])
+    try:
+        path = rec.record(device=device)
+        if path and path.exists():
+            click.echo(f"\nФайл: {path}")
+    except KeyboardInterrupt:
+        click.echo("\nЗапись остановлена.")
 
-    def _move_processed(self, input_file: Path):
-        """Перемещает обработанный файл в архив"""
-        processed_path = self.output_dir / "processed" / input_file.name
-        input_file.rename(processed_path)
 
-    def _save_results(self, result: dict, input_file: Path):
-        """Сохраняет результаты транскрибации"""
-        try:
-            full_text = "\n".join([seg["text"] for seg in result["segments"]])
-            txt_path = self.output_dir / "text" / f"{input_file.stem}.txt"
-            with open(txt_path, "w", encoding="utf-8") as f:
-                f.write(full_text)
+# ── transcribe ──────────────────────────────────────────────────────────────
 
-            timed_text = "\n".join(
-                f"[{seg['start']:.2f}-{seg['end']:.2f}] {seg['text']}"
-                for seg in result["segments"]
-            )
-            timed_path = self.output_dir / "text" / f"{input_file.stem}_timed.txt"
-            with open(timed_path, "w", encoding="utf-8") as f:
-                f.write(timed_text)
 
-        except Exception as e:
-            logging.error(f"Ошибка сохранения результатов: {str(e)}")
-            raise
+@cli.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--model", "-m", default=None, help="Модель (переопределяет конфиг)")
+@click.option("--language", "-l", default=None, help="Язык (ru, en, auto...)")
+@click.option("--backend", "-b", type=click.Choice(["auto", "mlx", "faster-whisper"]), default=None)
+@click.pass_context
+def transcribe(ctx, path, model, language, backend):
+    """Транскрибировать аудиофайл или папку."""
+    from processor import transcribe_file, SUPPORTED_AUDIO
 
-    def process_all_files(self):
-        """Обрабатывает все поддерживаемые файлы в директории"""
-        transcriber = FasterWhisperTranscriber()
+    config = ctx.obj["config"]
+    cfg_t = config.setdefault("transcription", {})
+    if backend:
+        cfg_t["backend"] = backend
+    if model:
+        if backend == "faster-whisper" or (not backend and cfg_t.get("backend") == "faster-whisper"):
+            cfg_t["fw_model"] = model
+        else:
+            cfg_t["mlx_model"] = model
+    if language:
+        cfg_t["language"] = language
 
-        for input_file in self.input_dir.glob("*"):
-            try:
-                if input_file.suffix.lower() not in self.SUPPORTED_INPUT_FORMATS:
-                    continue
+    p = Path(path)
+    if p.is_file():
+        transcribe_file(str(p), config)
+    elif p.is_dir():
+        files = sorted(f for f in p.iterdir() if f.suffix.lower() in SUPPORTED_AUDIO)
+        if not files:
+            click.echo(f"Нет аудиофайлов в {p}")
+            return
+        for f in files:
+            transcribe_file(str(f), config)
+    click.echo("Готово.")
 
-                logging.info(f"Начата обработка {input_file.name}")
 
-                result = transcriber.transcribe(str(input_file))
-                self._save_results(result, input_file)
+# ── diarize ─────────────────────────────────────────────────────────────────
 
-                self._move_processed(input_file)
 
-                logging.info(f"Файл {input_file.name} успешно обработан")
+@cli.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--min-speakers", type=int, default=None, help="Мин. число спикеров")
+@click.option("--max-speakers", type=int, default=None, help="Макс. число спикеров")
+@click.pass_context
+def diarize(ctx, path, min_speakers, max_speakers):
+    """Диаризация аудиофайла (определение спикеров)."""
+    from processor import diarize_file, transcribe_file, SUPPORTED_AUDIO
 
-            except Exception as e:
-                logging.error(f"Ошибка обработки {input_file.name}: {str(e)}")
-                continue
+    config = ctx.obj["config"]
+    cfg_d = config.setdefault("diarization", {})
+    if min_speakers is not None:
+        cfg_d["min_speakers"] = min_speakers
+    if max_speakers is not None:
+        cfg_d["max_speakers"] = max_speakers
+
+    p = Path(path)
+    files = [p] if p.is_file() else sorted(f for f in p.iterdir() if f.suffix.lower() in SUPPORTED_AUDIO)
+
+    for f in files:
+        # Сначала транскрибируем (если ещё нет), затем диаризуем
+        txt_path = f.with_suffix(".txt")
+        if txt_path.exists():
+            # Транскрибация уже есть — нужно восстановить segments
+            result = transcribe_file(str(f), config)
+        else:
+            result = transcribe_file(str(f), config)
+        diarize_file(str(f), config, transcription=result)
+
+    click.echo("Готово.")
+
+
+# ── process ─────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.pass_context
+def process(ctx, path):
+    """Полный pipeline: транскрибация + диаризация + суммаризация."""
+    from processor import process_file, process_directory
+
+    config = ctx.obj["config"]
+    p = Path(path)
+    if p.is_file():
+        process_file(str(p), config)
+    elif p.is_dir():
+        process_directory(str(p), config)
+    click.echo("Готово.")
+
+
+# ── devices ─────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+def devices():
+    """Показать доступные аудиоустройства."""
+    import sounddevice as sd
+    click.echo(sd.query_devices())
+
+
+# ── info ────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.pass_context
+def info(ctx):
+    """Показать информацию о системе и доступных backend'ах."""
+    from processor import show_info
+    click.echo(show_info(ctx.obj["config"]))
+
+
+# ── точка входа ─────────────────────────────────────────────────────────────
 
 
 def main():
-    worker = AudioWorker(input_dir="m4a_files", output_dir="results")
-    logging.info("Начало обработки файлов...")
-    start_total = time.time()
-
-    worker.process_all_files()
-
-    logging.info(f"Все файлы обработаны за {time.time() - start_total:.1f} сек")
+    cli()
 
 
 if __name__ == "__main__":

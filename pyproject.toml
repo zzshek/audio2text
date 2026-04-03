@@ -1,11 +1,57 @@
 [project]
 name = "audio2text"
-version = "0.1.0"
-description = "Batch audio-to-text transcription using Vosk"
+version = "0.2.0"
+description = "Meeting recorder, transcriber & diarizer — Apple Silicon (MLX) optimized"
 requires-python = ">=3.12"
 dependencies = [
+    "pyyaml>=6.0",
+    "click>=8.1",
+    "sounddevice>=0.5",
+    "soundfile>=0.13",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Apple Silicon (MLX) — транскрибация на Metal GPU
+mlx = [
+    "mlx>=0.22",
+    "mlx-whisper>=0.4",
+]
+# CUDA/CPU — транскрибация через CTranslate2
+cuda = [
     "faster-whisper>=1.2.0",
+]
+# Диаризация (определение спикеров)
+diarization = [
+    "pyannote.audio>=3.3",
+    "torch>=2.0",
+]
+# Суммаризация (seq2seq модели)
+summarization = [
+    "transformers>=4.40",
+    "torch>=2.0",
+]
+# LLM локальные (через mlx-lm на Apple Silicon)
+llm = [
+    "mlx-lm>=0.20",
+]
+# LLM через API
+llm-api = [
+    "openai>=1.0",
+    "anthropic>=0.30",
+]
+# Полная установка для Mac (Apple Silicon)
+mac = [
+    "audio2text[mlx,diarization,summarization]",
+]
+# Полная установка для NVIDIA
+nvidia = [
+    "audio2text[cuda,diarization,summarization]",
 ]
 
 [project.scripts]
 audio2text = "main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

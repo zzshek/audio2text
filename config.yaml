@@ -1,0 +1,72 @@
+# =============================================================================
+# audio2text — конфигурация
+# =============================================================================
+
+# Запись аудио
+recording:
+  format: opus           # opus | wav | mp3
+  bitrate: "48k"         # для opus: 24k-96k (48k mono ≈ 21 МБ/час)
+  sample_rate: 16000     # 16kHz достаточно для речи
+  channels: 1            # mono
+  output_dir: recordings # корневая папка записей
+
+# Транскрибация (Whisper)
+transcription:
+  # auto = MLX на Apple Silicon, faster-whisper на CUDA/CPU
+  backend: auto          # auto | mlx | faster-whisper
+
+  # MLX модели (Apple Silicon — Metal GPU)
+  mlx_model: mlx-community/whisper-large-v3-turbo
+  # Альтернативы:
+  #   mlx-community/whisper-large-v3-turbo-q4    — 4-bit, ~0.6 GB, быстрее
+  #   mlx-community/whisper-large-v3-mlx          — full precision, ~3 GB, лучшее качество
+
+  # faster-whisper модели (CUDA / CPU)
+  fw_model: large-v3-turbo   # tiny | base | small | medium | large-v3 | large-v3-turbo
+  fw_device: auto             # auto | cpu | cuda
+  fw_compute_type: int8       # int8 | float16 | float32
+
+  language: ru           # код языка ISO 639-1 или auto
+  beam_size: 5
+
+# Диаризация (определение спикеров)
+diarization:
+  enabled: true
+  model: pyannote/speaker-diarization-3.1
+  # HuggingFace token — нужен для gated-моделей pyannote
+  # Получить: https://huggingface.co/settings/tokens
+  hf_token: ""
+  min_speakers: null     # null = авто
+  max_speakers: null     # null = авто
+  device: cpu            # cpu | mps (mps нестабилен для pyannote)
+
+# Суммаризация
+summarization:
+  enabled: false
+  model: Kirili4ik/mbart_ruDialogSum
+  # Альтернативы:
+  #   RussianNLP/FRED-T5-Summarizer     — 1.7B, лучшее качество
+  #   IlyaGusev/mbart_ru_sum_gazeta     — новости/тексты
+  #   cointegrated/rut5-base-absum      — самый лёгкий (~0.9 GB)
+  device: auto           # auto | cpu | cuda | mps
+  max_length: 250
+  min_length: 50
+  num_beams: 4
+
+# LLM для пост-обработки (опционально)
+llm:
+  enabled: false
+  provider: local        # local | openai | anthropic
+
+  # Локальная модель (через mlx-lm на Apple Silicon)
+  local_model: mlx-community/Qwen2.5-7B-Instruct-4bit
+  # Альтернативы:
+  #   mlx-community/Mistral-7B-Instruct-v0.3-4bit
+  #   mlx-community/gemma-2-9b-it-4bit
+
+  # API (OpenAI / Anthropic)
+  api_model: ""          # gpt-4o | claude-sonnet-4-20250514
+  api_key: ""
+  api_base_url: ""       # для совместимых API
+
+  task: summarize        # summarize | format | extract_actions
