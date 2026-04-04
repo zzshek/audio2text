@@ -52,6 +52,9 @@ nvidia = [
 [project.scripts]
 audio2text = "main:main"
 
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
