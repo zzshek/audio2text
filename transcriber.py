@@ -62,8 +62,6 @@ class MLXTranscriber(TranscriberBase):
             path_or_hf_repo=self.model,
             language=self.language,
             word_timestamps=True,
-            beam_size=1,
-            best_of=1,
         )
 
         segments = []
