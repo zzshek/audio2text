@@ -150,6 +150,16 @@ def info(ctx):
     click.echo(show_info(ctx.obj["config"]))
 
 
+# ── gui ────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+def gui():
+    """Открыть графический интерфейс (macOS / desktop)."""
+    from gui import main as gui_main
+    gui_main()
+
+
 # ── точка входа ─────────────────────────────────────────────────────────────
 
 
