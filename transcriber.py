@@ -43,10 +43,9 @@ class MLXTranscriber(TranscriberBase):
     """Apple Silicon — Metal GPU через mlx-whisper."""
 
     def __init__(self, model: str = "mlx-community/whisper-large-v3-turbo",
-                 language: str = "ru", beam_size: int = 5):
+                 language: str = "ru"):
         self.model = model
         self.language = language if language != "auto" else None
-        self.beam_size = beam_size
 
         logger.info(f"MLX Whisper: загрузка модели {model}...")
         start = time.time()
@@ -62,7 +61,6 @@ class MLXTranscriber(TranscriberBase):
             audio_path,
             path_or_hf_repo=self.model,
             language=self.language,
-            beam_size=self.beam_size,
             word_timestamps=True,
         )
 
@@ -152,7 +150,6 @@ def create_transcriber(config: dict) -> TranscriberBase:
         return MLXTranscriber(
             model=cfg.get("mlx_model", "mlx-community/whisper-large-v3-turbo"),
             language=language,
-            beam_size=1,  # mlx-whisper поддерживает только greedy decoding
         )
     else:
         return FasterWhisperTranscriber(
