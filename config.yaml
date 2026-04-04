@@ -16,7 +16,7 @@ transcription:
   backend: auto          # auto | mlx | faster-whisper
 
   # MLX модели (Apple Silicon — Metal GPU)
-  mlx_model: mlx-community/whisper-large-v3-turbo
+  mlx_model: mlx-community/whisper-large-v3-mlx
   # Альтернативы:
   #   mlx-community/whisper-large-v3-turbo-q4    — 4-bit, ~0.6 GB, быстрее
   #   mlx-community/whisper-large-v3-mlx          — full precision, ~3 GB, лучшее качество
@@ -27,7 +27,7 @@ transcription:
   fw_compute_type: int8       # int8 | float16 | float32
 
   language: ru           # код языка ISO 639-1 или auto
-  beam_size: 5
+  beam_size: 1           # mlx-whisper поддерживает только beam_size=1
 
 # Диаризация (определение спикеров)
 diarization:
