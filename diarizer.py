@@ -83,7 +83,17 @@ class Diarizer:
         if self.max_speakers is not None:
             params["max_speakers"] = self.max_speakers
 
-        diarization = self._pipeline(audio_path, **params)
+        result = self._pipeline(audio_path, **params)
+
+        # pyannote >= 3.3 may return DiarizeOutput (named tuple) instead of
+        # a bare Annotation.  Extract the annotation in that case.
+        if hasattr(result, "itertracks"):
+            diarization = result
+        elif hasattr(result, "__iter__"):
+            # DiarizeOutput is tuple-like; first element is the Annotation
+            diarization = result[0] if result else result
+        else:
+            diarization = result
 
         turns = []
         for turn, _, speaker in diarization.itertracks(yield_label=True):
