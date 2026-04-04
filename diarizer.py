@@ -85,13 +85,12 @@ class Diarizer:
 
         result = self._pipeline(audio_path, **params)
 
-        # pyannote >= 3.3 may return DiarizeOutput (named tuple) instead of
-        # a bare Annotation.  Extract the annotation in that case.
+        # pyannote 4.x returns DiarizeOutput dataclass instead of bare
+        # Annotation — the annotation lives at .speaker_diarization
         if hasattr(result, "itertracks"):
             diarization = result
-        elif hasattr(result, "__iter__"):
-            # DiarizeOutput is tuple-like; first element is the Annotation
-            diarization = result[0] if result else result
+        elif hasattr(result, "speaker_diarization"):
+            diarization = result.speaker_diarization
         else:
             diarization = result
 
