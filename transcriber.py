@@ -152,7 +152,7 @@ def create_transcriber(config: dict) -> TranscriberBase:
         return MLXTranscriber(
             model=cfg.get("mlx_model", "mlx-community/whisper-large-v3-turbo"),
             language=language,
-            beam_size=beam_size,
+            beam_size=1,  # mlx-whisper поддерживает только greedy decoding
         )
     else:
         return FasterWhisperTranscriber(
