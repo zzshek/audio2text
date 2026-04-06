@@ -104,28 +104,40 @@ class Audio2TextApp:
         frame = ttk.Frame(notebook, padding=15)
         notebook.add(frame, text="  Запись  ")
 
-        # Device
-        ttk.Label(frame, text="Устройство:").grid(row=0, column=0, sticky="w", pady=5)
-        self.device_var = tk.StringVar(value="По умолчанию")
-        device_combo = ttk.Combobox(frame, textvariable=self.device_var,
-                                    state="readonly", width=50)
-        device_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
-        ttk.Button(frame, text="Обновить", width=10,
-                   command=lambda: self._refresh_devices(device_combo)).grid(
-            row=0, column=2, padx=(5, 0), pady=5)
+        # Микрофон
+        self.rec_mic_enabled = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frame, text="Микрофон:", variable=self.rec_mic_enabled).grid(
+            row=0, column=0, sticky="w", pady=5)
+        self.rec_mic_var = tk.StringVar(value="По умолчанию")
+        self.rec_mic_combo = ttk.Combobox(
+            frame, textvariable=self.rec_mic_var, state="readonly", width=50)
+        self.rec_mic_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
 
-        self._refresh_devices(device_combo)
+        # Системный звук
+        self.rec_sys_enabled = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame, text="Системный звук:", variable=self.rec_sys_enabled).grid(
+            row=1, column=0, sticky="w", pady=5)
+        self.rec_sys_var = tk.StringVar(value="Не выбрано")
+        self.rec_sys_combo = ttk.Combobox(
+            frame, textvariable=self.rec_sys_var, state="readonly", width=50)
+        self.rec_sys_combo.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=5)
+
+        ttk.Button(frame, text="Обновить", width=10,
+                   command=self._refresh_all_devices).grid(
+            row=0, column=2, rowspan=2, padx=(5, 0), pady=5)
+
+        self._refresh_all_devices()
 
         # VU meter
         self.vu_var = tk.DoubleVar(value=0)
-        ttk.Label(frame, text="Уровень:").grid(row=1, column=0, sticky="w", pady=5)
-        self.vu_bar = ttk.Progressbar(frame, variable=self.vu_var,
-                                       maximum=1.0, mode="determinate")
-        self.vu_bar.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=5)
+        ttk.Label(frame, text="Уровень:").grid(row=2, column=0, sticky="w", pady=5)
+        ttk.Progressbar(frame, variable=self.vu_var,
+                        maximum=1.0, mode="determinate").grid(
+            row=2, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=5)
 
         # Buttons
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=2, column=0, columnspan=3, pady=20)
+        btn_frame.grid(row=3, column=0, columnspan=3, pady=20)
 
         self.record_btn = ttk.Button(btn_frame, text="Начать запись",
                                      command=self._toggle_record)
@@ -139,37 +151,49 @@ class Audio2TextApp:
         self._recorder = None
         self._recording = False
 
-    def _refresh_devices(self, combo: ttk.Combobox):
+    def _get_input_device_list(self) -> list[tuple[int, str]]:
+        """Возвращает [(id, name), ...] входных аудиоустройств."""
         try:
             import sounddevice as sd
-            devices = sd.query_devices()
-            input_devs = ["По умолчанию"]
-            self._device_ids = [None]
-            for i, d in enumerate(devices):
-                if d["max_input_channels"] > 0:
-                    input_devs.append(f"{i}: {d['name']}")
-                    self._device_ids.append(i)
-            combo["values"] = input_devs
+            devs = sd.query_devices()
+            return [(i, d["name"]) for i, d in enumerate(devs)
+                    if d["max_input_channels"] > 0]
         except Exception as e:
-            combo["values"] = ["По умолчанию"]
-            self._device_ids = [None]
             self._log(f"Ошибка получения устройств: {e}")
+            return []
 
-    def _get_selected_device(self) -> int | None:
-        idx = 0
-        try:
-            values = list(self.device_var.master.nametowidget(
-                ".").tk.splitlist(""))
-        except Exception:
-            pass
-        selection = self.device_var.get()
-        if selection == "По умолчанию":
+    def _refresh_all_devices(self):
+        devs = self._get_input_device_list()
+        items = [f"{i}: {name}" for i, name in devs]
+        mic_values = ["По умолчанию"] + items
+        sys_values = ["Не выбрано"] + items
+        self.rec_mic_combo["values"] = mic_values
+        self.rec_sys_combo["values"] = sys_values
+        if hasattr(self, "live_mic_combo"):
+            self.live_mic_combo["values"] = mic_values
+            self.live_sys_combo["values"] = sys_values
+
+    @staticmethod
+    def _parse_device_id(selection: str) -> int | None:
+        """Парсит ID устройства из строки '2: Device Name'."""
+        if selection in ("По умолчанию", "Не выбрано", ""):
             return None
         try:
-            dev_id = int(selection.split(":")[0])
-            return dev_id
+            return int(selection.split(":")[0])
         except (ValueError, IndexError):
             return None
+
+    def _collect_devices(self, mic_enabled, mic_var, sys_enabled, sys_var) -> list:
+        """Собирает список включённых устройств для записи."""
+        devs = []
+        if mic_enabled.get():
+            dev = self._parse_device_id(mic_var.get())
+            devs.append(dev)  # None = устройство по умолчанию
+        if sys_enabled.get():
+            dev = self._parse_device_id(sys_var.get())
+            if dev is not None:  # "Не выбрано" → пропускаем
+                devs.append(dev)
+        return devs if devs else [None]
 
     def _toggle_record(self):
         if not self._recording:
@@ -178,31 +202,27 @@ class Audio2TextApp:
             self._stop_record()
 
     def _start_record(self):
+        if self._running_task and self._running_task.is_alive():
+            messagebox.showwarning("audio2text", "Задача уже выполняется, дождитесь завершения.")
+            return
+
         from recorder import Recorder
         self._recorder = Recorder(self.config)
         self._recording = True
         self.record_btn.configure(text="Остановить")
         self.record_status.configure(text="Идёт запись...")
 
-        device = self._get_selected_device()
+        devs = self._collect_devices(
+            self.rec_mic_enabled, self.rec_mic_var,
+            self.rec_sys_enabled, self.rec_sys_var,
+        )
 
-        # Patch callback to update VU meter
-        original_cb = self._recorder._audio_callback
-
-        def patched_cb(indata, frames, time_info, status):
-            import numpy as np
-            if status:
-                self.log_queue.put(f"Audio status: {status}")
-            with self._recorder._lock:
-                self._recorder._frames.append(indata.copy())
-            rms = float(np.sqrt(np.mean(indata ** 2)))
+        def vu_cb(rms):
             self.vu_var.set(min(rms * 10, 1.0))
-
-        self._recorder._audio_callback = patched_cb
 
         def do_record():
             try:
-                path = self._recorder.record(device=device)
+                path = self._recorder.record(devices=devs, vu_callback=vu_cb)
                 if path and path.exists():
                     self.log_queue.put(f"Файл сохранён: {path}")
             except Exception as e:
@@ -229,34 +249,51 @@ class Audio2TextApp:
         frame = ttk.Frame(notebook, padding=15)
         notebook.add(frame, text="  Live  ")
 
-        # Device
-        ttk.Label(frame, text="Устройство:").grid(row=0, column=0, sticky="w", pady=5)
-        self.live_device_var = tk.StringVar(value="По умолчанию")
-        self.live_device_combo = ttk.Combobox(
-            frame, textvariable=self.live_device_var, state="readonly", width=50)
-        self.live_device_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
+        # Микрофон
+        self.live_mic_enabled = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frame, text="Микрофон:", variable=self.live_mic_enabled).grid(
+            row=0, column=0, sticky="w", pady=5)
+        self.live_mic_var = tk.StringVar(value="По умолчанию")
+        self.live_mic_combo = ttk.Combobox(
+            frame, textvariable=self.live_mic_var, state="readonly", width=50)
+        self.live_mic_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
+
+        # Системный звук
+        self.live_sys_enabled = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame, text="Системный звук:", variable=self.live_sys_enabled).grid(
+            row=1, column=0, sticky="w", pady=5)
+        self.live_sys_var = tk.StringVar(value="Не выбрано")
+        self.live_sys_combo = ttk.Combobox(
+            frame, textvariable=self.live_sys_var, state="readonly", width=50)
+        self.live_sys_combo.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=5)
+
         ttk.Button(frame, text="Обновить", width=10,
-                   command=lambda: self._refresh_devices(self.live_device_combo)).grid(
-            row=0, column=2, padx=(5, 0), pady=5)
-        self._refresh_devices(self.live_device_combo)
+                   command=self._refresh_all_devices).grid(
+            row=0, column=2, rowspan=2, padx=(5, 0), pady=5)
+
+        # Заполняем списки (используем общий _refresh_all_devices)
+        devs = self._get_input_device_list()
+        items = [f"{i}: {name}" for i, name in devs]
+        self.live_mic_combo["values"] = ["По умолчанию"] + items
+        self.live_sys_combo["values"] = ["Не выбрано"] + items
 
         # Chunk size
-        ttk.Label(frame, text="Чанк (сек):").grid(row=1, column=0, sticky="w", pady=5)
+        ttk.Label(frame, text="Чанк (сек):").grid(row=2, column=0, sticky="w", pady=5)
         self.live_chunk_var = tk.StringVar(value="30")
         ttk.Spinbox(frame, textvariable=self.live_chunk_var,
                     from_=10, to=120, increment=5, width=6).grid(
-            row=1, column=1, sticky="w", padx=(10, 0), pady=5)
+            row=2, column=1, sticky="w", padx=(10, 0), pady=5)
 
         # VU meter
         self.live_vu_var = tk.DoubleVar(value=0)
-        ttk.Label(frame, text="Уровень:").grid(row=2, column=0, sticky="w", pady=5)
+        ttk.Label(frame, text="Уровень:").grid(row=3, column=0, sticky="w", pady=5)
         ttk.Progressbar(frame, variable=self.live_vu_var,
                         maximum=1.0, mode="determinate").grid(
-            row=2, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=5)
+            row=3, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=5)
 
         # Button + status
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=3, column=0, columnspan=3, pady=10)
+        btn_frame.grid(row=4, column=0, columnspan=3, pady=10)
 
         self.live_btn = ttk.Button(btn_frame, text="Live Запись",
                                    command=self._toggle_live)
@@ -267,7 +304,7 @@ class Audio2TextApp:
 
         # Live transcription text
         trans_frame = ttk.LabelFrame(frame, text="Транскрипция (real-time)")
-        trans_frame.grid(row=4, column=0, columnspan=3, sticky="nsew", pady=(10, 0))
+        trans_frame.grid(row=5, column=0, columnspan=3, sticky="nsew", pady=(10, 0))
 
         self.live_text = tk.Text(trans_frame, height=14, state="disabled",
                                  wrap="word", font=("Menlo", 11))
@@ -277,7 +314,7 @@ class Audio2TextApp:
         self.live_text.pack(fill="both", expand=True)
 
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(4, weight=1)
+        frame.rowconfigure(5, weight=1)
 
         self._live_recording = False
         self._live_stop_event = None
@@ -306,7 +343,10 @@ class Audio2TextApp:
         self.live_text.delete("1.0", "end")
         self.live_text.configure(state="disabled")
 
-        device = self._get_live_device()
+        devs = self._collect_devices(
+            self.live_mic_enabled, self.live_mic_var,
+            self.live_sys_enabled, self.live_sys_var,
+        )
         try:
             chunk = int(self.live_chunk_var.get())
         except ValueError:
@@ -322,12 +362,11 @@ class Audio2TextApp:
         def do_live():
             try:
                 from processor import record_live
-                # Сигнал что запись пошла (модель загружена)
                 self.root.after(0, lambda: self.live_status.configure(
                     text="Запись + транскрибация..."))
                 path = record_live(
                     self.config,
-                    device=device,
+                    devices=devs,
                     stop_event=self._live_stop_event,
                     on_chunk=on_chunk,
                     vu_callback=vu_cb,
@@ -354,15 +393,6 @@ class Audio2TextApp:
         self.live_btn.configure(text="Live Запись")
         self.live_status.configure(text="")
         self.live_vu_var.set(0)
-
-    def _get_live_device(self) -> int | None:
-        selection = self.live_device_var.get()
-        if selection == "По умолчанию":
-            return None
-        try:
-            return int(selection.split(":")[0])
-        except (ValueError, IndexError):
-            return None
 
     def _poll_live_text(self):
         while True:

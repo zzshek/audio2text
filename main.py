@@ -22,15 +22,16 @@ def cli(ctx, config):
 
 
 @cli.command()
-@click.option("--device", "-d", type=int, default=None, help="ID аудиоустройства (см. audio2text devices)")
+@click.option("--device", "-d", type=int, multiple=True, help="ID аудиоустройства (можно указать несколько: -d 1 -d 3)")
 @click.pass_context
 def record(ctx, device):
     """Записать аудио с микрофона."""
     from recorder import Recorder
 
     rec = Recorder(ctx.obj["config"])
+    devs = list(device) if device else None
     try:
-        path = rec.record(device=device)
+        path = rec.record(devices=devs)
         if path and path.exists():
             click.echo(f"\nФайл: {path}")
     except KeyboardInterrupt:
@@ -133,7 +134,7 @@ def process(ctx, path):
 
 
 @cli.command()
-@click.option("--device", "-d", type=int, default=None, help="ID аудиоустройства")
+@click.option("--device", "-d", type=int, multiple=True, help="ID аудиоустройства (можно несколько: -d 1 -d 3)")
 @click.option("--chunk", "-k", type=int, default=None, help="Длина чанка в секундах (по умолчанию 30)")
 @click.pass_context
 def live(ctx, device, chunk):
@@ -144,8 +145,9 @@ def live(ctx, device, chunk):
     if chunk is not None:
         config.setdefault("live", {})["chunk_seconds"] = chunk
 
+    devs = list(device) if device else None
     try:
-        path = record_live(config, device=device)
+        path = record_live(config, devices=devs)
         if path and path.exists():
             click.echo(f"\nФайл: {path}")
     except KeyboardInterrupt:

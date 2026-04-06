@@ -32,12 +32,27 @@ def _make_session_dir(base_dir: str) -> Path:
 
 
 def _make_filename() -> str:
-    """Имя файла вида meeting_14-30"""
-    return f"meeting_{datetime.now().strftime('%H-%M')}"
+    """Имя файла вида 2026-04-06 14:00"""
+    return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
 def _has_ffmpeg() -> bool:
     return shutil.which("ffmpeg") is not None
+
+
+def _mix_device_frames(dev_frames: list[list]) -> np.ndarray:
+    """Миксует аудио с нескольких устройств (сложение сигналов + клиппинг)."""
+    if len(dev_frames) == 1:
+        return np.concatenate(dev_frames[0], axis=0)
+    min_blocks = min(len(df) for df in dev_frames)
+    mixed = []
+    for j in range(min_blocks):
+        block = dev_frames[0][j].astype(np.float64)
+        for i in range(1, len(dev_frames)):
+            block += dev_frames[i][j]
+        np.clip(block, -1.0, 1.0, out=block)
+        mixed.append(block.astype(np.float32))
+    return np.concatenate(mixed, axis=0)
 
 
 def _encode_opus(wav_path: str, opus_path: str, bitrate: str = "48k") -> None:
@@ -81,57 +96,90 @@ class Recorder:
         """Возвращает список доступных аудиоустройств."""
         return sd.query_devices()
 
-    def record(self, device: int | None = None) -> Path:
+    def record(self, devices=None, vu_callback=None) -> Path:
         """Записывает аудио до вызова stop() или Ctrl+C.
+
+        Args:
+            devices: int, list[int], или None. Несколько устройств → микширование.
+            vu_callback: callback(rms: float) для VU-метра. Если None — вывод в консоль.
 
         Returns:
             Path к сохранённому аудиофайлу.
         """
+        # Normalize devices
+        if devices is None:
+            dev_list = [None]
+        elif isinstance(devices, int):
+            dev_list = [devices]
+        else:
+            dev_list = devices if devices else [None]
+
         session_dir = _make_session_dir(self.output_dir)
         base_name = _make_filename()
 
-        self._frames = []
         self._recording = True
+        dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]
+
+        def make_callback(idx):
+            def cb(indata, frames, time_info, status):
+                if status:
+                    logger.warning(f"Audio status: {status}")
+                with self._lock:
+                    dev_frames[idx].append(indata.copy())
+                rms = float(np.sqrt(np.mean(indata ** 2)))
+                if vu_callback:
+                    vu_callback(rms)
+                else:
+                    bars = min(int(rms * 200), 40)
+                    print(f"\r  {'█' * bars}{'░' * (40 - bars)} {rms:.4f}", end="", flush=True)
+            return cb
 
         logger.info(
             f"Запись начата (sample_rate={self.sample_rate}, "
             f"channels={self.channels}, format={self.audio_format})"
         )
-        if device is not None:
-            logger.info(f"Устройство: {sd.query_devices(device)['name']}")
-        else:
-            logger.info(f"Устройство: {sd.query_devices(sd.default.device[0])['name']}")
+        for i, d in enumerate(dev_list):
+            name = sd.query_devices(d if d is not None else sd.default.device[0])["name"]
+            label = f" {i + 1}" if len(dev_list) > 1 else ""
+            logger.info(f"Устройство{label}: {name}")
 
         start_time = time.time()
+        blocksize = int(self.sample_rate * 0.5)
 
-        try:
-            with sd.InputStream(
+        streams = []
+        for i, dev in enumerate(dev_list):
+            streams.append(sd.InputStream(
                 samplerate=self.sample_rate,
                 channels=self.channels,
                 dtype="float32",
-                device=device,
-                callback=self._audio_callback,
-                blocksize=int(self.sample_rate * 0.5),  # 500ms chunks
-            ):
-                logger.info("Нажмите Ctrl+C для остановки записи...")
-                while self._recording:
-                    time.sleep(0.1)
+                device=dev,
+                callback=make_callback(i),
+                blocksize=blocksize,
+            ))
+
+        try:
+            for s in streams:
+                s.start()
+            logger.info("Нажмите Ctrl+C для остановки записи...")
+            while self._recording:
+                time.sleep(0.1)
         except KeyboardInterrupt:
             pass
         finally:
             self._recording = False
+            for s in streams:
+                s.stop()
+                s.close()
 
         duration = time.time() - start_time
         logger.info(f"Запись остановлена. Длительность: {duration:.1f} сек")
 
-        if not self._frames:
+        if not any(dev_frames):
             logger.warning("Нет записанных данных")
             return Path()
 
-        # Собираем аудио
-        audio_data = np.concatenate(self._frames, axis=0)
+        audio_data = _mix_device_frames(dev_frames)
 
-        # Сохраняем
         output_path = self._save(audio_data, session_dir, base_name)
         logger.info(f"Сохранено: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} МБ)")
         return output_path
@@ -139,19 +187,6 @@ class Recorder:
     def stop(self) -> None:
         """Останавливает запись из другого потока."""
         self._recording = False
-
-    def _audio_callback(self, indata: np.ndarray, frames: int, time_info, status) -> None:
-        """Callback для sounddevice — вызывается из аудио-потока."""
-        if status:
-            logger.warning(f"Audio status: {status}")
-        with self._lock:
-            self._frames.append(indata.copy())
-
-        # Показываем уровень громкости
-        rms = np.sqrt(np.mean(indata ** 2))
-        bars = int(rms * 200)
-        bars = min(bars, 40)
-        print(f"\r  {'█' * bars}{'░' * (40 - bars)} {rms:.4f}", end="", flush=True)
 
     def _save(self, audio_data: np.ndarray, session_dir: Path, base_name: str) -> Path:
         """Сохраняет аудио в нужном формате."""
