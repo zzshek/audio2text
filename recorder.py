@@ -101,7 +101,7 @@ class Recorder:
 
         Args:
             devices: int, list[int], или None. Несколько устройств → микширование.
-            vu_callback: callback(rms: float) для VU-метра. Если None — вывод в консоль.
+            vu_callback: callback(device_idx: int, rms: float) для VU-метра. Если None — консоль.
 
         Returns:
             Path к сохранённому аудиофайлу.
@@ -128,7 +128,7 @@ class Recorder:
                     dev_frames[idx].append(indata.copy())
                 rms = float(np.sqrt(np.mean(indata ** 2)))
                 if vu_callback:
-                    vu_callback(rms)
+                    vu_callback(idx, rms)
                 else:
                     bars = min(int(rms * 200), 40)
                     print(f"\r  {'█' * bars}{'░' * (40 - bars)} {rms:.4f}", end="", flush=True)

@@ -233,7 +233,7 @@ def record_live(
         devices: int, list[int], или None. Несколько устройств → микширование.
         stop_event: threading.Event для остановки извне (GUI). Если None — Ctrl+C.
         on_chunk: callback(text: str) — вызывается при готовности нового текста.
-        vu_callback: callback(rms: float) — уровень громкости для VU-метра.
+        vu_callback: callback(device_idx: int, rms: float) — уровень громкости для VU-метра.
     """
     import tempfile
     import threading
@@ -284,7 +284,7 @@ def record_live(
                 dev_frames[idx].append(indata.copy())
             rms = float(np.sqrt(np.mean(indata ** 2)))
             if vu_callback:
-                vu_callback(rms)
+                vu_callback(idx, rms)
             else:
                 bars = min(int(rms * 200), 40)
                 print(f"\r  {'█' * bars}{'░' * (40 - bars)} {rms:.4f}", end="", flush=True)
