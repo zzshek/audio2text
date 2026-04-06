@@ -220,6 +220,156 @@ def show_info(config: dict) -> str:
     return "\n".join(lines)
 
 
+def record_live(
+    config: dict,
+    device: int | None = None,
+    stop_event=None,
+    on_chunk=None,
+    vu_callback=None,
+) -> Path:
+    """Запись с real-time транскрибацией: текст пишется в файл прямо во время записи.
+
+    Args:
+        stop_event: threading.Event для остановки извне (GUI). Если None — Ctrl+C.
+        on_chunk: callback(text: str) — вызывается при готовности нового текста.
+        vu_callback: callback(rms: float) — уровень громкости для VU-метра.
+    """
+    import tempfile
+    import threading
+
+    import numpy as np
+    import sounddevice as sd
+    import soundfile as sf
+
+    from recorder import _make_session_dir, _make_filename, _encode_opus, _has_ffmpeg
+    from transcriber import create_transcriber
+
+    cfg_rec = config.get("recording", {})
+    sample_rate = cfg_rec.get("sample_rate", 16000)
+    channels = cfg_rec.get("channels", 1)
+    output_dir = cfg_rec.get("output_dir", "recordings")
+    chunk_seconds = config.get("live", {}).get("chunk_seconds", 30)
+
+    # Загружаем модель до начала записи
+    logger.info("Загрузка модели транскрибации...")
+    transcriber = create_transcriber(config)
+
+    session_dir = _make_session_dir(output_dir)
+    base_name = _make_filename()
+    output_txt = session_dir / f"{base_name}_live.txt"
+
+    frames: list[np.ndarray] = []
+    lock = threading.Lock()
+    _stop = stop_event or threading.Event()
+    last_chunk_idx = 0
+    blocksize = int(sample_rate * 0.5)  # 500ms блоки
+
+    def audio_callback(indata, frame_count, time_info, status):
+        if status:
+            logger.warning(f"Audio status: {status}")
+        with lock:
+            frames.append(indata.copy())
+        rms = float(np.sqrt(np.mean(indata ** 2)))
+        if vu_callback:
+            vu_callback(rms)
+        else:
+            bars = min(int(rms * 200), 40)
+            print(f"\r  {'█' * bars}{'░' * (40 - bars)} {rms:.4f}", end="", flush=True)
+
+    def _transcribe_new_frames():
+        nonlocal last_chunk_idx
+        with lock:
+            new_frames = frames[last_chunk_idx:]
+            current_idx = len(frames)
+        if not new_frames:
+            return
+        last_chunk_idx = current_idx
+        audio_data = np.concatenate(new_frames, axis=0)
+        time_offset = (current_idx - len(new_frames)) * blocksize / sample_rate
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            sf.write(tmp_path, audio_data, sample_rate)
+            result = transcriber.transcribe(tmp_path)
+            segments = result.get("segments", [])
+            if segments:
+                lines = []
+                for seg in segments:
+                    ts = _fmt(seg["start"] + time_offset)
+                    lines.append(f"[{ts}] {seg['text']}")
+                chunk_text = "\n".join(lines) + "\n"
+                with open(output_txt, "a", encoding="utf-8") as f:
+                    f.write(chunk_text)
+                if on_chunk:
+                    on_chunk(chunk_text)
+                else:
+                    print(f"\n  +{len(segments)} сегментов -> {output_txt.name}")
+                logger.info(
+                    f"[Live] +{int(time_offset)}s: {len(segments)} сегментов"
+                )
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def transcription_loop():
+        while True:
+            if _stop.wait(timeout=chunk_seconds):
+                # Стоп — финальная транскрибация остатка
+                _transcribe_new_frames()
+                break
+            _transcribe_new_frames()
+
+    t = threading.Thread(target=transcription_loop, daemon=True)
+    t.start()
+
+    logger.info(
+        f"Запись + live-транскрибация (чанки по {chunk_seconds} сек). "
+        f"Ctrl+C для остановки."
+    )
+
+    try:
+        with sd.InputStream(
+            samplerate=sample_rate,
+            channels=channels,
+            dtype="float32",
+            device=device,
+            callback=audio_callback,
+            blocksize=blocksize,
+        ):
+            while not _stop.is_set():
+                time.sleep(0.1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        _stop.set()
+        if not stop_event:
+            print()  # новая строка после progress bar (только CLI)
+
+    logger.info("Транскрибация остатка...")
+    t.join(timeout=300)  # ждём финальную транскрибацию
+
+    # Сохраняем полный аудиофайл
+    if frames:
+        all_audio = np.concatenate(frames, axis=0)
+        audio_format = cfg_rec.get("format", "opus")
+        if audio_format == "opus" and _has_ffmpeg():
+            audio_path = session_dir / f"{base_name}.opus"
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = tmp.name
+            try:
+                sf.write(tmp_path, all_audio, sample_rate)
+                _encode_opus(tmp_path, str(audio_path), str(cfg_rec.get("bitrate", "48k")))
+            finally:
+                Path(tmp_path).unlink(missing_ok=True)
+        else:
+            audio_path = session_dir / f"{base_name}.wav"
+            sf.write(str(audio_path), all_audio, sample_rate)
+        logger.info(f"Аудио сохранено: {audio_path}")
+
+    logger.info(f"Текст: {output_txt}")
+    return output_txt
+
+
 def _fmt(seconds: float) -> str:
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)

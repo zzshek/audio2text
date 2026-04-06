@@ -81,6 +81,7 @@ class Audio2TextApp:
         notebook.pack(fill="both", expand=True, padx=10, pady=(10, 0))
 
         self._build_record_tab(notebook)
+        self._build_live_tab(notebook)
         self._build_transcribe_tab(notebook)
         self._build_diarize_tab(notebook)
         self._build_process_tab(notebook)
@@ -221,6 +222,160 @@ class Audio2TextApp:
         self.record_btn.configure(text="Начать запись")
         self.record_status.configure(text="")
         self.vu_var.set(0)
+
+    # ── Live tab ───────────────────────────────────────────────────────
+
+    def _build_live_tab(self, notebook: ttk.Notebook):
+        frame = ttk.Frame(notebook, padding=15)
+        notebook.add(frame, text="  Live  ")
+
+        # Device
+        ttk.Label(frame, text="Устройство:").grid(row=0, column=0, sticky="w", pady=5)
+        self.live_device_var = tk.StringVar(value="По умолчанию")
+        self.live_device_combo = ttk.Combobox(
+            frame, textvariable=self.live_device_var, state="readonly", width=50)
+        self.live_device_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
+        ttk.Button(frame, text="Обновить", width=10,
+                   command=lambda: self._refresh_devices(self.live_device_combo)).grid(
+            row=0, column=2, padx=(5, 0), pady=5)
+        self._refresh_devices(self.live_device_combo)
+
+        # Chunk size
+        ttk.Label(frame, text="Чанк (сек):").grid(row=1, column=0, sticky="w", pady=5)
+        self.live_chunk_var = tk.StringVar(value="30")
+        ttk.Spinbox(frame, textvariable=self.live_chunk_var,
+                    from_=10, to=120, increment=5, width=6).grid(
+            row=1, column=1, sticky="w", padx=(10, 0), pady=5)
+
+        # VU meter
+        self.live_vu_var = tk.DoubleVar(value=0)
+        ttk.Label(frame, text="Уровень:").grid(row=2, column=0, sticky="w", pady=5)
+        ttk.Progressbar(frame, variable=self.live_vu_var,
+                        maximum=1.0, mode="determinate").grid(
+            row=2, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=5)
+
+        # Button + status
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=3, column=0, columnspan=3, pady=10)
+
+        self.live_btn = ttk.Button(btn_frame, text="Live Запись",
+                                   command=self._toggle_live)
+        self.live_btn.pack(side="left", padx=5)
+
+        self.live_status = ttk.Label(btn_frame, text="")
+        self.live_status.pack(side="left", padx=10)
+
+        # Live transcription text
+        trans_frame = ttk.LabelFrame(frame, text="Транскрипция (real-time)")
+        trans_frame.grid(row=4, column=0, columnspan=3, sticky="nsew", pady=(10, 0))
+
+        self.live_text = tk.Text(trans_frame, height=14, state="disabled",
+                                 wrap="word", font=("Menlo", 11))
+        scrollbar = ttk.Scrollbar(trans_frame, command=self.live_text.yview)
+        self.live_text.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        self.live_text.pack(fill="both", expand=True)
+
+        frame.columnconfigure(1, weight=1)
+        frame.rowconfigure(4, weight=1)
+
+        self._live_recording = False
+        self._live_stop_event = None
+        self._live_text_queue: queue.Queue[str] = queue.Queue()
+
+    def _toggle_live(self):
+        if not self._live_recording:
+            self._start_live()
+        else:
+            self._stop_live()
+
+    def _start_live(self):
+        if self._running_task and self._running_task.is_alive():
+            messagebox.showwarning("audio2text", "Задача уже выполняется, дождитесь завершения.")
+            return
+
+        import threading as _threading
+
+        self._live_recording = True
+        self._live_stop_event = _threading.Event()
+        self.live_btn.configure(text="Остановить")
+        self.live_status.configure(text="Загрузка модели...")
+
+        # Очищаем окно транскрипции
+        self.live_text.configure(state="normal")
+        self.live_text.delete("1.0", "end")
+        self.live_text.configure(state="disabled")
+
+        device = self._get_live_device()
+        try:
+            chunk = int(self.live_chunk_var.get())
+        except ValueError:
+            chunk = 30
+        self.config.setdefault("live", {})["chunk_seconds"] = chunk
+
+        def on_chunk(text):
+            self._live_text_queue.put(text)
+
+        def vu_cb(rms):
+            self.live_vu_var.set(min(rms * 10, 1.0))
+
+        def do_live():
+            try:
+                from processor import record_live
+                # Сигнал что запись пошла (модель загружена)
+                self.root.after(0, lambda: self.live_status.configure(
+                    text="Запись + транскрибация..."))
+                path = record_live(
+                    self.config,
+                    device=device,
+                    stop_event=self._live_stop_event,
+                    on_chunk=on_chunk,
+                    vu_callback=vu_cb,
+                )
+                if path and path.exists():
+                    self.log_queue.put(f"Live транскрипция: {path}")
+            except Exception as e:
+                self.log_queue.put(f"Ошибка live: {e}")
+            finally:
+                self.root.after(0, self._on_live_done)
+
+        self._running_task = _threading.Thread(target=do_live, daemon=True)
+        self._running_task.start()
+        self._poll_live_text()
+
+    def _stop_live(self):
+        if self._live_stop_event:
+            self._live_stop_event.set()
+        self.live_status.configure(text="Остановка, транскрибация остатка...")
+
+    def _on_live_done(self):
+        self._poll_live_text()  # подобрать остаток из очереди
+        self._live_recording = False
+        self.live_btn.configure(text="Live Запись")
+        self.live_status.configure(text="")
+        self.live_vu_var.set(0)
+
+    def _get_live_device(self) -> int | None:
+        selection = self.live_device_var.get()
+        if selection == "По умолчанию":
+            return None
+        try:
+            return int(selection.split(":")[0])
+        except (ValueError, IndexError):
+            return None
+
+    def _poll_live_text(self):
+        while True:
+            try:
+                text = self._live_text_queue.get_nowait()
+                self.live_text.configure(state="normal")
+                self.live_text.insert("end", text)
+                self.live_text.see("end")
+                self.live_text.configure(state="disabled")
+            except queue.Empty:
+                break
+        if self._live_recording:
+            self.root.after(200, self._poll_live_text)
 
     # ── Transcribe tab ─────────────────────────────────────────────────
 

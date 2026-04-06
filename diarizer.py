@@ -83,7 +83,13 @@ class Diarizer:
         if self.max_speakers is not None:
             params["max_speakers"] = self.max_speakers
 
-        result = self._pipeline(audio_path, **params)
+        import torch
+        import torchaudio
+
+        waveform, sample_rate = torchaudio.load(audio_path)
+        audio_input = {"waveform": waveform, "sample_rate": sample_rate}
+
+        result = self._pipeline(audio_input, **params)
 
         # pyannote 4.x returns DiarizeOutput dataclass instead of bare
         # Annotation — the annotation lives at .speaker_diarization

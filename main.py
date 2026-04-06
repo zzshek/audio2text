@@ -129,6 +129,29 @@ def process(ctx, path):
     click.echo("Готово.")
 
 
+# ── live ───────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--device", "-d", type=int, default=None, help="ID аудиоустройства")
+@click.option("--chunk", "-k", type=int, default=None, help="Длина чанка в секундах (по умолчанию 30)")
+@click.pass_context
+def live(ctx, device, chunk):
+    """Запись с real-time транскрибацией (текст пишется во время записи)."""
+    from processor import record_live
+
+    config = ctx.obj["config"]
+    if chunk is not None:
+        config.setdefault("live", {})["chunk_seconds"] = chunk
+
+    try:
+        path = record_live(config, device=device)
+        if path and path.exists():
+            click.echo(f"\nФайл: {path}")
+    except KeyboardInterrupt:
+        click.echo("\nОстановлено.")
+
+
 # ── devices ─────────────────────────────────────────────────────────────────
 
 
