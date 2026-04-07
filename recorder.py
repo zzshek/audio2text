@@ -96,12 +96,13 @@ class Recorder:
         """Возвращает список доступных аудиоустройств."""
         return sd.query_devices()
 
-    def record(self, devices=None, vu_callback=None) -> Path:
+    def record(self, devices=None, vu_callback=None, custom_name: str = "") -> Path:
         """Записывает аудио до вызова stop() или Ctrl+C.
 
         Args:
             devices: int, list[int], или None. Несколько устройств → микширование.
             vu_callback: callback(device_idx: int, rms: float) для VU-метра. Если None — консоль.
+            custom_name: пользовательское название для файла (добавляется к дате).
 
         Returns:
             Path к сохранённому аудиофайлу.
@@ -116,6 +117,8 @@ class Recorder:
 
         session_dir = _make_session_dir(self.output_dir)
         base_name = _make_filename()
+        if custom_name.strip():
+            base_name = f"{base_name} {custom_name.strip()}"
 
         self._recording = True
         dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]

@@ -33,6 +33,7 @@ class Summarizer:
         self.max_length: int = cfg.get("max_length", 250)
         self.min_length: int = cfg.get("min_length", 50)
         self.num_beams: int = cfg.get("num_beams", 4)
+        self.context: str = cfg.get("context", "")
 
         self._tokenizer = None
         self._model = None
@@ -63,6 +64,9 @@ class Summarizer:
         self._load_model()
 
         import torch
+
+        if self.context:
+            text = f"Контекст: {self.context}\n\n{text}"
 
         inputs = self._tokenizer(
             text,
@@ -118,20 +122,31 @@ class LLMSummarizer:
         self.api_key: str = cfg.get("api_key", "")
         self.api_base_url: str = cfg.get("api_base_url", "")
         self.task: str = cfg.get("task", "summarize")
+        self.context: str = config.get("summarization", {}).get("context", "")
 
         self._mlx_model = None
         self._mlx_tokenizer = None
 
     def _get_prompt(self, text: str) -> str:
         """Формирует промпт в зависимости от задачи."""
+        context_line = ""
+        if self.context:
+            context_line = (
+                f"Контекст: {self.context}\n"
+                "Используй профессиональную терминологию из данной области.\n\n"
+            )
+
         prompts = {
             "summarize": (
+                f"{context_line}"
                 "Сделай краткое резюме этой встречи. Выдели основные темы и решения:\n\n"
             ),
             "format": (
+                f"{context_line}"
                 "Отформатируй эту транскрибацию встречи в читаемый вид с абзацами и заголовками:\n\n"
             ),
             "extract_actions": (
+                f"{context_line}"
                 "Извлеки из транскрибации встречи список задач (action items) "
                 "с указанием ответственного (если упоминается):\n\n"
             ),

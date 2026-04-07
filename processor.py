@@ -226,6 +226,7 @@ def record_live(
     stop_event=None,
     on_chunk=None,
     vu_callback=None,
+    custom_name: str = "",
 ) -> Path:
     """Запись с real-time транскрибацией: текст пишется в файл прямо во время записи.
 
@@ -234,6 +235,7 @@ def record_live(
         stop_event: threading.Event для остановки извне (GUI). Если None — Ctrl+C.
         on_chunk: callback(text: str) — вызывается при готовности нового текста.
         vu_callback: callback(device_idx: int, rms: float) — уровень громкости для VU-метра.
+        custom_name: пользовательское название для файла.
     """
     import tempfile
     import threading
@@ -268,6 +270,8 @@ def record_live(
 
     session_dir = _make_session_dir(output_dir)
     base_name = _make_filename()
+    if custom_name.strip():
+        base_name = f"{base_name} {custom_name.strip()}"
     output_txt = session_dir / f"{base_name}_live.txt"
 
     dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]
