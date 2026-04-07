@@ -16,15 +16,15 @@ transcription:
   backend: auto          # auto | mlx | faster-whisper
 
   # MLX модели (Apple Silicon — Metal GPU)
-  mlx_model: mlx-community/whisper-large-v3-mlx
+  mlx_model: mlx-community/whisper-large-v3-turbo
   # Альтернативы:
-  #   mlx-community/whisper-large-v3-turbo-q4    — 4-bit, ~0.6 GB, быстрее
-  #   mlx-community/whisper-large-v3-mlx          — full precision, ~3 GB, лучшее качество
+  #   mlx-community/whisper-large-v3-mlx          — full precision, ~3 GB, макс. качество (+1% WER)
+  #   mlx-community/whisper-large-v3-turbo-q4    — 4-bit, ~0.6 GB, быстрее но хуже
 
   # faster-whisper модели (CUDA / CPU)
   fw_model: large-v3-turbo   # tiny | base | small | medium | large-v3 | large-v3-turbo
   fw_device: auto             # auto | cpu | cuda
-  fw_compute_type: int8       # int8 | float16 | float32
+  fw_compute_type: float16    # float16 | int8 | float32 (float16 — лучшее качество)
 
   language: ru           # код языка ISO 639-1 или auto
   beam_size: 1           # mlx-whisper поддерживает только beam_size=1
@@ -40,7 +40,7 @@ diarization:
   max_speakers: null     # null = авто
   device: cpu            # cpu | mps (mps нестабилен для pyannote)
 
-# Суммаризация
+# Суммаризация (seq2seq — fallback, если LLM отключён)
 summarization:
   enabled: false
   model: Kirili4ik/mbart_ruDialogSum
@@ -55,16 +55,17 @@ summarization:
   # Контекст для суммаризации — помогает модели использовать правильную терминологию
   context: "IT-компания, сфера аналитики данных (Data Analytics). Используй профессиональную IT-терминологию."
 
-# LLM для пост-обработки (опционально)
+# LLM для пост-обработки — основной движок суммаризации
 llm:
-  enabled: false
+  enabled: true
   provider: local        # local | openai | anthropic
 
   # Локальная модель (через mlx-lm на Apple Silicon)
-  local_model: mlx-community/Qwen2.5-7B-Instruct-4bit
+  # Qwen2.5-14B-4bit: лучшее качество русского, 128K контекст, ~8.5 GB RAM
+  local_model: mlx-community/Qwen2.5-14B-Instruct-4bit
   # Альтернативы:
-  #   mlx-community/Mistral-7B-Instruct-v0.3-4bit
-  #   mlx-community/gemma-2-9b-it-4bit
+  #   mlx-community/Qwen2.5-7B-Instruct-4bit    — легче (~4.5 GB), чуть хуже
+  #   mlx-community/gemma-2-9b-it-4bit           — 8K контекст, хуже для длинных записей
 
   # API (OpenAI / Anthropic)
   api_model: ""          # gpt-4o | claude-sonnet-4-20250514

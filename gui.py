@@ -1,4 +1,4 @@
-"""audio2text — GUI с glassmorphism-дизайном в стиле Apple."""
+"""audio2text — GUI в стиле macOS Tahoe Liquid Glass."""
 
 from __future__ import annotations
 
@@ -14,29 +14,29 @@ from pathlib import Path
 from processor import load_config, SUPPORTED_AUDIO
 
 
-# ── Glassmorphism palette ─────────────────────────────────────────────────────
+# ── macOS Tahoe Liquid Glass palette ──────────────────────────────────────────
 
-BG = "#0d0d1a"
-SURFACE = "#1c1c2e"
-SURFACE_LIGHT = "#252540"
-BORDER = "#2d2d4a"
-TEXT = "#f5f5f7"
-TEXT_DIM = "#86868b"
-ACCENT = "#0a84ff"
-ACCENT_HOVER = "#409cff"
-RED = "#ff453a"
-GREEN = "#32d74b"
-INPUT_BG = "#141428"
-MONO_FONT = "Menlo" if platform.system() == "Darwin" else "Monospace"
-UI_FONT = "Helvetica"
+BG = "#1e1e1e"
+GLASS = "#2d2d2d"
+GLASS_BORDER = "#4a4a4a"
+GLASS_HOVER = "#3a3a3a"
+GLASS_ACTIVE = "#454545"
+TEXT = "#ffffff"
+TEXT_DIM = "#999999"
+ACCENT = "#007AFF"
+ACCENT_HOVER = "#409CFF"
+RED = "#FF3B30"
+GREEN = "#30D158"
+INPUT_BG = "#1a1a1a"
+SEPARATOR = "#3a3a3a"
+_FONT = "Helvetica"
+_MONO = "Menlo" if platform.system() == "Darwin" else "Monospace"
 
 
 # ── Logging handler → GUI ────────────────────────────────────────────────────
 
 
 class QueueHandler(logging.Handler):
-    """Отправляет log-записи в очередь для потокобезопасного вывода в GUI."""
-
     def __init__(self, log_queue: queue.Queue):
         super().__init__()
         self.log_queue = log_queue
@@ -49,7 +49,7 @@ class QueueHandler(logging.Handler):
 
 
 class Audio2TextApp:
-    """Главное окно приложения с glassmorphism-дизайном."""
+    """Главное окно приложения — Liquid Glass UI."""
 
     def __init__(self):
         self.root = tk.Tk()
@@ -57,7 +57,6 @@ class Audio2TextApp:
         self.root.geometry("860x700")
         self.root.minsize(720, 580)
         self.root.configure(bg=BG)
-
         self.root.option_add("*tearOff", False)
 
         self.config = load_config("config.yaml")
@@ -69,119 +68,113 @@ class Audio2TextApp:
         self._build_ui()
         self._poll_log_queue()
 
-    # ── Theme ─────────────────────────────────────────────────────────
+    # ── Liquid Glass theme ────────────────────────────────────────────
 
     def _setup_theme(self):
-        style = ttk.Style()
-        style.theme_use("clam")
+        s = ttk.Style()
+        s.theme_use("clam")
 
-        # Base
-        style.configure(".",
-            background=SURFACE, foreground=TEXT,
-            bordercolor=BORDER, darkcolor=BG, lightcolor=SURFACE_LIGHT,
-            troughcolor=INPUT_BG, selectbackground=ACCENT,
-            selectforeground="white", focuscolor=ACCENT,
-            insertcolor=TEXT, font=(UI_FONT, 12),
-        )
+        s.configure(".", background=GLASS, foreground=TEXT,
+                    bordercolor=GLASS_BORDER, darkcolor=BG,
+                    lightcolor=GLASS_HOVER, troughcolor=INPUT_BG,
+                    selectbackground=ACCENT, selectforeground="white",
+                    focuscolor=ACCENT, insertcolor=TEXT,
+                    font=(_FONT, 12))
 
-        # Notebook
-        style.configure("TNotebook",
-            background=BG, borderwidth=0, tabmargins=[0, 8, 0, 0])
-        style.configure("TNotebook.Tab",
-            background=BG, foreground=TEXT_DIM,
-            padding=[20, 10], borderwidth=0, font=(UI_FONT, 12))
-        style.map("TNotebook.Tab",
-            background=[("selected", SURFACE)],
-            foreground=[("selected", TEXT)],
-            expand=[("selected", [0, 0, 0, 0])],
-        )
+        # ── Notebook (segmented control look) ──
+        s.configure("TNotebook", background=BG, borderwidth=0,
+                    tabmargins=[8, 8, 8, 0])
+        s.configure("TNotebook.Tab", background=BG, foreground=TEXT_DIM,
+                    padding=[20, 8], borderwidth=0, font=(_FONT, 12))
+        s.map("TNotebook.Tab",
+              background=[("selected", GLASS)],
+              foreground=[("selected", TEXT)])
 
-        # Frame
-        style.configure("TFrame", background=SURFACE)
-        style.configure("Dark.TFrame", background=BG)
+        # ── Frame ──
+        s.configure("TFrame", background=GLASS)
+        s.configure("Window.TFrame", background=BG)
 
-        # LabelFrame
-        style.configure("TLabelframe",
-            background=SURFACE, bordercolor=BORDER,
-            borderwidth=1, relief="solid")
-        style.configure("TLabelframe.Label",
-            background=SURFACE, foreground=TEXT_DIM, font=(UI_FONT, 11))
+        # ── LabelFrame (glass panel) ──
+        s.configure("TLabelframe", background=GLASS,
+                    bordercolor=GLASS_BORDER, borderwidth=1,
+                    relief="solid")
+        s.configure("TLabelframe.Label", background=GLASS,
+                    foreground=TEXT_DIM, font=(_FONT, 11))
 
-        # Label
-        style.configure("TLabel",
-            background=SURFACE, foreground=TEXT, font=(UI_FONT, 12))
-        style.configure("Dim.TLabel",
-            background=SURFACE, foreground=TEXT_DIM, font=(UI_FONT, 10))
-        style.configure("Title.TLabel",
-            background=SURFACE, foreground=TEXT, font=(UI_FONT, 14, "bold"))
+        # ── Labels ──
+        s.configure("TLabel", background=GLASS, foreground=TEXT,
+                    font=(_FONT, 12))
+        s.configure("Dim.TLabel", background=GLASS, foreground=TEXT_DIM,
+                    font=(_FONT, 10))
+        s.configure("Section.TLabel", background=GLASS, foreground=TEXT,
+                    font=(_FONT, 13, "bold"))
 
-        # Button — Accent (primary)
-        style.configure("TButton",
-            background=ACCENT, foreground="white",
-            borderwidth=0, padding=[16, 8], font=(UI_FONT, 12))
-        style.map("TButton",
-            background=[("active", ACCENT_HOVER), ("pressed", "#0060cc")])
+        # ── Button (glass capsule) ──
+        s.configure("TButton", background=GLASS_HOVER, foreground=TEXT,
+                    borderwidth=1, bordercolor=GLASS_BORDER,
+                    padding=[14, 6], font=(_FONT, 12), anchor="center")
+        s.map("TButton",
+              background=[("active", GLASS_ACTIVE),
+                          ("pressed", GLASS_ACTIVE)])
 
-        # Button — Danger (stop / recording)
-        style.configure("Danger.TButton",
-            background=RED, foreground="white",
-            borderwidth=0, padding=[16, 8], font=(UI_FONT, 12))
-        style.map("Danger.TButton",
-            background=[("active", "#ff6961"), ("pressed", "#cc362e")])
+        # ── Accent button (primary action) ──
+        s.configure("Accent.TButton", background=ACCENT,
+                    foreground="white", borderwidth=0,
+                    padding=[16, 7], font=(_FONT, 12, "bold"))
+        s.map("Accent.TButton",
+              background=[("active", ACCENT_HOVER),
+                          ("pressed", "#005EC4")])
 
-        # Button — Secondary (outline)
-        style.configure("Secondary.TButton",
-            background=SURFACE_LIGHT, foreground=TEXT,
-            borderwidth=1, padding=[12, 6], font=(UI_FONT, 11))
-        style.map("Secondary.TButton",
-            background=[("active", BORDER)])
+        # ── Danger button ──
+        s.configure("Danger.TButton", background=RED,
+                    foreground="white", borderwidth=0,
+                    padding=[16, 7], font=(_FONT, 12, "bold"))
+        s.map("Danger.TButton",
+              background=[("active", "#FF6961"),
+                          ("pressed", "#D32F2F")])
 
-        # Entry
-        style.configure("TEntry",
-            fieldbackground=INPUT_BG, foreground=TEXT,
-            bordercolor=BORDER, insertcolor=TEXT,
-            borderwidth=1, padding=[8, 6])
-        style.map("TEntry", bordercolor=[("focus", ACCENT)])
+        # ── Entry ──
+        s.configure("TEntry", fieldbackground=INPUT_BG, foreground=TEXT,
+                    bordercolor=GLASS_BORDER, insertcolor=TEXT,
+                    borderwidth=1, padding=[6, 5])
+        s.map("TEntry", bordercolor=[("focus", ACCENT)])
 
-        # Combobox
-        style.configure("TCombobox",
-            fieldbackground=INPUT_BG, foreground=TEXT,
-            background=SURFACE_LIGHT, bordercolor=BORDER,
-            arrowcolor=TEXT_DIM, padding=[6, 4])
-        style.map("TCombobox",
-            fieldbackground=[("readonly", INPUT_BG)],
-            bordercolor=[("focus", ACCENT)])
+        # ── Combobox ──
+        s.configure("TCombobox", fieldbackground=INPUT_BG, foreground=TEXT,
+                    background=GLASS_HOVER, bordercolor=GLASS_BORDER,
+                    arrowcolor=TEXT_DIM, padding=[6, 4])
+        s.map("TCombobox",
+              fieldbackground=[("readonly", INPUT_BG)],
+              bordercolor=[("focus", ACCENT)])
         self.root.option_add("*TCombobox*Listbox.background", INPUT_BG)
         self.root.option_add("*TCombobox*Listbox.foreground", TEXT)
         self.root.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
         self.root.option_add("*TCombobox*Listbox.selectForeground", "white")
 
-        # Progressbar
-        style.configure("Horizontal.TProgressbar",
-            troughcolor=INPUT_BG, background=ACCENT,
-            bordercolor=BORDER, borderwidth=0, thickness=6)
+        # ── Progressbar (accent fill) ──
+        s.configure("Horizontal.TProgressbar", troughcolor=INPUT_BG,
+                    background=ACCENT, borderwidth=0, thickness=5)
 
-        # Checkbutton
-        style.configure("TCheckbutton",
-            background=SURFACE, foreground=TEXT,
-            indicatorcolor=INPUT_BG, font=(UI_FONT, 12))
-        style.map("TCheckbutton",
-            indicatorcolor=[("selected", ACCENT)],
-            background=[("active", SURFACE)])
+        # ── Checkbutton ──
+        s.configure("TCheckbutton", background=GLASS, foreground=TEXT,
+                    indicatorcolor=INPUT_BG, font=(_FONT, 12))
+        s.map("TCheckbutton",
+              indicatorcolor=[("selected", ACCENT)],
+              background=[("active", GLASS)])
 
-        # Scrollbar
-        style.configure("TScrollbar",
-            background=SURFACE_LIGHT, troughcolor=SURFACE,
-            borderwidth=0, arrowcolor=TEXT_DIM)
+        # ── Scrollbar ──
+        s.configure("TScrollbar", background=GLASS_HOVER,
+                    troughcolor=GLASS, borderwidth=0,
+                    arrowcolor=TEXT_DIM)
 
-        # Separator
-        style.configure("TSeparator", background=BORDER)
+        # ── Separator ──
+        s.configure("TSeparator", background=SEPARATOR)
 
-        # Spinbox
-        style.configure("TSpinbox",
-            fieldbackground=INPUT_BG, foreground=TEXT,
-            background=SURFACE_LIGHT, bordercolor=BORDER, arrowcolor=TEXT_DIM)
-        style.map("TSpinbox", bordercolor=[("focus", ACCENT)])
+        # ── Spinbox ──
+        s.configure("TSpinbox", fieldbackground=INPUT_BG, foreground=TEXT,
+                    background=GLASS_HOVER, bordercolor=GLASS_BORDER,
+                    arrowcolor=TEXT_DIM)
+        s.map("TSpinbox", bordercolor=[("focus", ACCENT)])
 
     # ── Logging ───────────────────────────────────────────────────────
 
@@ -215,15 +208,16 @@ class Audio2TextApp:
         self._build_process_tab(notebook)
         self._build_settings_tab(notebook)
 
-        # Log panel
+        # Log panel (glass)
         log_frame = ttk.LabelFrame(self.root, text="Лог")
         log_frame.pack(fill="both", expand=True, padx=12, pady=10)
 
         self.log_text = tk.Text(
             log_frame, height=8, state="disabled", wrap="word",
-            font=(MONO_FONT, 11), bg=INPUT_BG, fg=TEXT,
+            font=(_MONO, 11), bg=INPUT_BG, fg=TEXT,
             insertbackground=TEXT, selectbackground=ACCENT,
-            selectforeground="white", relief="flat", padx=8, pady=6)
+            selectforeground="white", relief="flat", padx=8, pady=6,
+            highlightthickness=0)
         scrollbar = ttk.Scrollbar(log_frame, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
@@ -232,7 +226,7 @@ class Audio2TextApp:
     # ── Record tab ─────────────────────────────────────────────────────
 
     def _build_record_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=20)
+        frame = ttk.Frame(notebook, padding=18)
         notebook.add(frame, text="  Запись  ")
 
         # Микрофон + VU
@@ -269,7 +263,7 @@ class Audio2TextApp:
             row=3, column=1, columnspan=2, sticky="ew",
             padx=(10, 0), pady=(2, 8))
 
-        ttk.Button(frame, text="Обновить", style="Secondary.TButton",
+        ttk.Button(frame, text="Обновить",
                    command=self._refresh_all_devices).grid(
             row=0, column=2, rowspan=2, padx=(8, 0), pady=5)
 
@@ -287,7 +281,8 @@ class Audio2TextApp:
         self.rec_name_var = tk.StringVar(value="")
         ttk.Entry(frame, textvariable=self.rec_name_var).grid(
             row=5, column=1, sticky="ew", padx=(10, 0), pady=(8, 0))
-        ttk.Label(frame, text="(опционально)", style="Dim.TLabel").grid(
+        ttk.Label(frame, text="(опционально)",
+                  style="Dim.TLabel").grid(
             row=5, column=2, padx=(8, 0), pady=(8, 0))
 
         # Buttons
@@ -295,46 +290,44 @@ class Audio2TextApp:
         btn_frame.grid(row=6, column=0, columnspan=3, pady=15)
 
         ttk.Button(btn_frame, text="Проверка звука",
-                   style="Secondary.TButton",
                    command=self._test_record_devices).pack(
             side="left", padx=5)
 
         # Recording indicator (blinking red dot)
         self._rec_dot_canvas = tk.Canvas(
             btn_frame, width=14, height=14,
-            bg=SURFACE, highlightthickness=0)
+            bg=GLASS, highlightthickness=0)
         self._rec_dot = self._rec_dot_canvas.create_oval(
             2, 2, 12, 12, fill=RED, outline="", state="hidden")
-        self._rec_dot_canvas.pack(side="left", padx=(10, 0))
+        self._rec_dot_canvas.pack(side="left", padx=(12, 0))
 
         self.record_btn = ttk.Button(
-            btn_frame, text="Начать запись", command=self._toggle_record)
-        self.record_btn.pack(side="left", padx=(2, 5))
+            btn_frame, text="Начать запись",
+            style="Accent.TButton", command=self._toggle_record)
+        self.record_btn.pack(side="left", padx=(3, 5))
 
         ttk.Button(btn_frame, text="Открыть папку",
-                   style="Secondary.TButton",
                    command=self._open_recordings_folder).pack(
             side="left", padx=5)
 
-        self.record_status = ttk.Label(btn_frame, text="", style="Dim.TLabel")
+        self.record_status = ttk.Label(
+            btn_frame, text="", style="Dim.TLabel")
         self.record_status.pack(side="left", padx=10)
 
         frame.columnconfigure(1, weight=1)
-
         self._recorder = None
         self._recording = False
 
     def _test_record_devices(self):
         self._test_devices(
             self.rec_mic_enabled, self.rec_mic_var, self.rec_mic_vu,
-            self.rec_sys_enabled, self.rec_sys_var, self.rec_sys_vu,
-        )
+            self.rec_sys_enabled, self.rec_sys_var, self.rec_sys_vu)
 
-    # Виртуальные loopback-устройства
+    # ── Device management ─────────────────────────────────────────────
+
     _VIRTUAL_PATTERNS = [
         "blackhole", "soundflower", "loopback audio",
-        "virtual cable", "vb-cable",
-    ]
+        "virtual cable", "vb-cable"]
 
     def _get_input_device_list(self) -> list[tuple[int, str]]:
         try:
@@ -357,13 +350,12 @@ class Audio2TextApp:
         mic_values = ["По умолчанию"] + items
         sys_values = ["Не выбрано"] + items
 
-        for combo_pair in [
+        for mic_c, sys_c in [
             (getattr(self, "rec_mic_combo", None),
              getattr(self, "rec_sys_combo", None)),
             (getattr(self, "live_mic_combo", None),
              getattr(self, "live_sys_combo", None)),
         ]:
-            mic_c, sys_c = combo_pair
             if mic_c:
                 mic_c["values"] = mic_values
             if sys_c:
@@ -384,12 +376,10 @@ class Audio2TextApp:
             if sys_var and sys_var.get() == "Не выбрано" and virtual_found:
                 sys_var.set(virtual_found)
             if hint_var:
-                if virtual_found:
-                    hint_var.set("")
-                else:
-                    hint_var.set(
-                        "Для захвата системного звука установите BlackHole: "
-                        "brew install blackhole-2ch")
+                hint_var.set(
+                    "" if virtual_found else
+                    "Для захвата системного звука установите BlackHole: "
+                    "brew install blackhole-2ch")
 
     @staticmethod
     def _parse_device_id(selection: str) -> int | None:
@@ -401,8 +391,7 @@ class Audio2TextApp:
             return None
 
     def _collect_devices(self, mic_enabled, mic_var, sys_enabled, sys_var):
-        devs = []
-        tags = []
+        devs, tags = [], []
         if mic_enabled.get():
             devs.append(self._parse_device_id(mic_var.get()))
             tags.append("mic")
@@ -411,9 +400,7 @@ class Audio2TextApp:
             if dev is not None:
                 devs.append(dev)
                 tags.append("sys")
-        if not devs:
-            return [None], ["mic"]
-        return devs, tags
+        return (devs, tags) if devs else ([None], ["mic"])
 
     def _test_devices(self, mic_enabled, mic_var, mic_vu,
                       sys_enabled, sys_var, sys_vu):
@@ -426,8 +413,7 @@ class Audio2TextApp:
 
         devs, tags = self._collect_devices(
             mic_enabled, mic_var, sys_enabled, sys_var)
-        cfg = self.config.get("recording", {})
-        sample_rate = cfg.get("sample_rate", 16000)
+        sample_rate = self.config.get("recording", {}).get("sample_rate", 16000)
         max_rms: dict[str, float] = {"mic": 0.0, "sys": 0.0}
 
         def make_cb(idx):
@@ -435,50 +421,43 @@ class Audio2TextApp:
             def cb(indata, frames, time_info, status):
                 rms = float(np.sqrt(np.mean(indata ** 2)))
                 val = min(rms * 10, 1.0)
-                if tag == "mic":
-                    mic_vu.set(val)
-                else:
-                    sys_vu.set(val)
+                (mic_vu if tag == "mic" else sys_vu).set(val)
                 max_rms[tag] = max(max_rms[tag], rms)
             return cb
 
         streams = []
         for i, dev in enumerate(devs):
             try:
-                s = sd.InputStream(
+                st = sd.InputStream(
                     samplerate=sample_rate, channels=1, dtype="float32",
                     device=dev, callback=make_cb(i),
                     blocksize=int(sample_rate * 0.5))
-                s.start()
-                streams.append(s)
+                st.start()
+                streams.append(st)
             except Exception as e:
                 self._log(f"Ошибка устройства {dev}: {e}")
-
         if not streams:
             return
 
-        self._log("Проверка звука... (3 секунды, говорите / включите звук)")
+        self._log("Проверка звука... (3 секунды)")
 
         def stop_test():
-            for s in streams:
-                s.stop()
-                s.close()
-            mic_vu.set(0)
-            sys_vu.set(0)
+            for st in streams:
+                st.stop(); st.close()
+            mic_vu.set(0); sys_vu.set(0)
             lines = []
             for tag in tags:
-                name = "Микрофон" if tag == "mic" else "Системный звук"
+                nm = "Микрофон" if tag == "mic" else "Системный звук"
                 r = max_rms[tag]
-                if r < 0.001:
-                    status = "НЕТ СИГНАЛА"
-                elif r < 0.005:
-                    status = "очень тихо"
-                else:
-                    status = f"OK (макс. уровень {r:.4f})"
-                lines.append(f"  {name}: {status}")
-            self._log("Результат проверки:\n" + "\n".join(lines))
+                st = ("НЕТ СИГНАЛА" if r < 0.001
+                      else "очень тихо" if r < 0.005
+                      else f"OK ({r:.4f})")
+                lines.append(f"  {nm}: {st}")
+            self._log("Результат:\n" + "\n".join(lines))
 
         self.root.after(3000, stop_test)
+
+    # ── Record controls ───────────────────────────────────────────────
 
     def _toggle_record(self):
         if not self._recording:
@@ -488,30 +467,28 @@ class Audio2TextApp:
 
     def _start_record(self):
         if self._running_task and self._running_task.is_alive():
-            messagebox.showwarning(
-                "audio2text", "Задача уже выполняется, дождитесь завершения.")
+            messagebox.showwarning("audio2text",
+                                   "Задача уже выполняется.")
             return
 
         from recorder import Recorder
         self._recorder = Recorder(self.config)
         self._recording = True
-        self.record_btn.configure(text="Остановить", style="Danger.TButton")
+        self.record_btn.configure(text="Остановить",
+                                  style="Danger.TButton")
         self.record_status.configure(text="Идёт запись...")
         self._do_blink(self._rec_dot_canvas, self._rec_dot, "_recording")
 
         devs, tags = self._collect_devices(
             self.rec_mic_enabled, self.rec_mic_var,
-            self.rec_sys_enabled, self.rec_sys_var,
-        )
+            self.rec_sys_enabled, self.rec_sys_var)
         custom_name = self.rec_name_var.get().strip()
 
         def vu_cb(idx, rms):
             val = min(rms * 10, 1.0)
             if idx < len(tags):
-                if tags[idx] == "mic":
-                    self.rec_mic_vu.set(val)
-                else:
-                    self.rec_sys_vu.set(val)
+                (self.rec_mic_vu if tags[idx] == "mic"
+                 else self.rec_sys_vu).set(val)
 
         def do_record():
             try:
@@ -525,7 +502,8 @@ class Audio2TextApp:
             finally:
                 self.root.after(0, self._on_record_done)
 
-        self._running_task = threading.Thread(target=do_record, daemon=True)
+        self._running_task = threading.Thread(
+            target=do_record, daemon=True)
         self._running_task.start()
 
     def _stop_record(self):
@@ -534,7 +512,8 @@ class Audio2TextApp:
 
     def _on_record_done(self):
         self._recording = False
-        self.record_btn.configure(text="Начать запись", style="TButton")
+        self.record_btn.configure(text="Начать запись",
+                                  style="Accent.TButton")
         self.record_status.configure(text="")
         self.rec_mic_vu.set(0)
         self.rec_sys_vu.set(0)
@@ -542,7 +521,7 @@ class Audio2TextApp:
     # ── Live tab ───────────────────────────────────────────────────────
 
     def _build_live_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=20)
+        frame = ttk.Frame(notebook, padding=18)
         notebook.add(frame, text="  Live  ")
 
         # Микрофон + VU
@@ -552,7 +531,8 @@ class Audio2TextApp:
             row=0, column=0, sticky="w", pady=(5, 0))
         self.live_mic_var = tk.StringVar(value="По умолчанию")
         self.live_mic_combo = ttk.Combobox(
-            frame, textvariable=self.live_mic_var, state="readonly", width=50)
+            frame, textvariable=self.live_mic_var,
+            state="readonly", width=50)
         self.live_mic_combo.grid(
             row=0, column=1, sticky="ew", padx=(10, 0), pady=(5, 0))
 
@@ -569,7 +549,8 @@ class Audio2TextApp:
             row=2, column=0, sticky="w", pady=(5, 0))
         self.live_sys_var = tk.StringVar(value="Не выбрано")
         self.live_sys_combo = ttk.Combobox(
-            frame, textvariable=self.live_sys_var, state="readonly", width=50)
+            frame, textvariable=self.live_sys_var,
+            state="readonly", width=50)
         self.live_sys_combo.grid(
             row=2, column=1, sticky="ew", padx=(10, 0), pady=(5, 0))
 
@@ -579,7 +560,7 @@ class Audio2TextApp:
             row=3, column=1, columnspan=2, sticky="ew",
             padx=(10, 0), pady=(2, 8))
 
-        ttk.Button(frame, text="Обновить", style="Secondary.TButton",
+        ttk.Button(frame, text="Обновить",
                    command=self._refresh_all_devices).grid(
             row=0, column=2, rowspan=2, padx=(8, 0), pady=5)
 
@@ -617,49 +598,53 @@ class Audio2TextApp:
         self.live_name_var = tk.StringVar(value="")
         ttk.Entry(frame, textvariable=self.live_name_var).grid(
             row=6, column=1, sticky="ew", padx=(10, 0), pady=(8, 0))
-        ttk.Label(frame, text="(опционально)", style="Dim.TLabel").grid(
+        ttk.Label(frame, text="(опционально)",
+                  style="Dim.TLabel").grid(
             row=6, column=2, padx=(8, 0), pady=(8, 0))
 
-        # Buttons + status
+        # Buttons
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=7, column=0, columnspan=3, pady=10)
+        btn_frame.grid(row=7, column=0, columnspan=3, pady=12)
 
         ttk.Button(btn_frame, text="Проверка звука",
-                   style="Secondary.TButton",
                    command=self._test_live_devices).pack(
             side="left", padx=5)
 
-        # Live recording indicator (blinking red dot)
         self._live_dot_canvas = tk.Canvas(
             btn_frame, width=14, height=14,
-            bg=SURFACE, highlightthickness=0)
+            bg=GLASS, highlightthickness=0)
         self._live_dot = self._live_dot_canvas.create_oval(
             2, 2, 12, 12, fill=RED, outline="", state="hidden")
-        self._live_dot_canvas.pack(side="left", padx=(10, 0))
+        self._live_dot_canvas.pack(side="left", padx=(12, 0))
 
         self.live_btn = ttk.Button(
-            btn_frame, text="Live Запись", command=self._toggle_live)
-        self.live_btn.pack(side="left", padx=(2, 5))
+            btn_frame, text="Live Запись",
+            style="Accent.TButton", command=self._toggle_live)
+        self.live_btn.pack(side="left", padx=(3, 5))
 
         ttk.Button(btn_frame, text="Открыть папку",
-                   style="Secondary.TButton",
                    command=self._open_recordings_folder).pack(
             side="left", padx=5)
 
-        self.live_status = ttk.Label(btn_frame, text="", style="Dim.TLabel")
+        self.live_status = ttk.Label(
+            btn_frame, text="", style="Dim.TLabel")
         self.live_status.pack(side="left", padx=10)
 
-        # Live transcription text
-        trans_frame = ttk.LabelFrame(frame, text="Транскрипция (real-time)")
+        # Live transcription (glass panel)
+        trans_frame = ttk.LabelFrame(
+            frame, text="Транскрипция (real-time)")
         trans_frame.grid(
-            row=8, column=0, columnspan=3, sticky="nsew", pady=(10, 0))
+            row=8, column=0, columnspan=3,
+            sticky="nsew", pady=(10, 0))
 
         self.live_text = tk.Text(
             trans_frame, height=10, state="disabled", wrap="word",
-            font=(MONO_FONT, 11), bg=INPUT_BG, fg=TEXT,
+            font=(_MONO, 11), bg=INPUT_BG, fg=TEXT,
             insertbackground=TEXT, selectbackground=ACCENT,
-            selectforeground="white", relief="flat", padx=8, pady=6)
-        scrollbar = ttk.Scrollbar(trans_frame, command=self.live_text.yview)
+            selectforeground="white", relief="flat",
+            padx=8, pady=6, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(
+            trans_frame, command=self.live_text.yview)
         self.live_text.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         self.live_text.pack(fill="both", expand=True)
@@ -671,6 +656,8 @@ class Audio2TextApp:
         self._live_stop_event = None
         self._live_text_queue: queue.Queue[str] = queue.Queue()
 
+    # ── Live controls ─────────────────────────────────────────────────
+
     def _toggle_live(self):
         if not self._live_recording:
             self._start_live()
@@ -679,28 +666,26 @@ class Audio2TextApp:
 
     def _start_live(self):
         if self._running_task and self._running_task.is_alive():
-            messagebox.showwarning(
-                "audio2text", "Задача уже выполняется, дождитесь завершения.")
+            messagebox.showwarning("audio2text",
+                                   "Задача уже выполняется.")
             return
 
         import threading as _threading
-
         self._live_recording = True
         self._live_stop_event = _threading.Event()
-        self.live_btn.configure(text="Остановить", style="Danger.TButton")
+        self.live_btn.configure(text="Остановить",
+                                style="Danger.TButton")
         self.live_status.configure(text="Загрузка модели...")
         self._do_blink(self._live_dot_canvas, self._live_dot,
                        "_live_recording")
 
-        # Очищаем окно транскрипции
         self.live_text.configure(state="normal")
         self.live_text.delete("1.0", "end")
         self.live_text.configure(state="disabled")
 
         devs, tags = self._collect_devices(
             self.live_mic_enabled, self.live_mic_var,
-            self.live_sys_enabled, self.live_sys_var,
-        )
+            self.live_sys_enabled, self.live_sys_var)
         try:
             chunk = int(self.live_chunk_var.get())
         except ValueError:
@@ -714,10 +699,8 @@ class Audio2TextApp:
         def vu_cb(idx, rms):
             val = min(rms * 10, 1.0)
             if idx < len(tags):
-                if tags[idx] == "mic":
-                    self.live_mic_vu.set(val)
-                else:
-                    self.live_sys_vu.set(val)
+                (self.live_mic_vu if tags[idx] == "mic"
+                 else self.live_sys_vu).set(val)
 
         def do_live():
             try:
@@ -728,8 +711,7 @@ class Audio2TextApp:
                     self.config, devices=devs,
                     stop_event=self._live_stop_event,
                     on_chunk=on_chunk, vu_callback=vu_cb,
-                    custom_name=custom_name,
-                )
+                    custom_name=custom_name)
                 if path and path.exists():
                     self.log_queue.put(f"Live транскрипция: {path}")
             except Exception as e:
@@ -737,25 +719,27 @@ class Audio2TextApp:
             finally:
                 self.root.after(0, self._on_live_done)
 
-        self._running_task = _threading.Thread(target=do_live, daemon=True)
+        self._running_task = _threading.Thread(
+            target=do_live, daemon=True)
         self._running_task.start()
         self._poll_live_text()
 
     def _stop_live(self):
         if self._live_stop_event:
             self._live_stop_event.set()
-        self.live_status.configure(text="Остановка, транскрибация остатка...")
+        self.live_status.configure(
+            text="Остановка, транскрибация остатка...")
 
     def _test_live_devices(self):
         self._test_devices(
             self.live_mic_enabled, self.live_mic_var, self.live_mic_vu,
-            self.live_sys_enabled, self.live_sys_var, self.live_sys_vu,
-        )
+            self.live_sys_enabled, self.live_sys_var, self.live_sys_vu)
 
     def _on_live_done(self):
         self._poll_live_text()
         self._live_recording = False
-        self.live_btn.configure(text="Live Запись", style="TButton")
+        self.live_btn.configure(text="Live Запись",
+                                style="Accent.TButton")
         self.live_status.configure(text="")
         self.live_mic_vu.set(0)
         self.live_sys_vu.set(0)
@@ -776,7 +760,7 @@ class Audio2TextApp:
     # ── Transcribe tab ─────────────────────────────────────────────────
 
     def _build_transcribe_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=20)
+        frame = ttk.Frame(notebook, padding=18)
         notebook.add(frame, text="  Транскрибация  ")
 
         ttk.Label(frame, text="Файл / папка:").grid(
@@ -785,22 +769,24 @@ class Audio2TextApp:
         ttk.Entry(frame, textvariable=self.trans_path_var).grid(
             row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
 
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=0, column=2, padx=(5, 0), pady=5)
-        ttk.Button(btn_frame, text="Файл", style="Secondary.TButton",
+        bf = ttk.Frame(frame)
+        bf.grid(row=0, column=2, padx=(5, 0), pady=5)
+        ttk.Button(bf, text="Файл",
                    command=lambda: self._pick_audio_file(
                        self.trans_path_var)).pack(side="left", padx=1)
-        ttk.Button(btn_frame, text="Папка", style="Secondary.TButton",
+        ttk.Button(bf, text="Папка",
                    command=lambda: self._pick_dir(
                        self.trans_path_var)).pack(side="left", padx=1)
 
         ttk.Label(frame, text="Язык:").grid(
             row=1, column=0, sticky="w", pady=5)
         self.trans_lang_var = tk.StringVar(
-            value=self.config.get("transcription", {}).get("language", "ru"))
-        ttk.Combobox(frame, textvariable=self.trans_lang_var, width=10,
-                     values=["ru", "en", "auto", "de", "fr",
-                             "es", "zh", "ja"]).grid(
+            value=self.config.get(
+                "transcription", {}).get("language", "ru"))
+        ttk.Combobox(
+            frame, textvariable=self.trans_lang_var, width=10,
+            values=["ru", "en", "auto", "de", "fr",
+                    "es", "zh", "ja"]).grid(
             row=1, column=1, sticky="w", padx=(10, 0), pady=5)
 
         ttk.Label(frame, text="Backend:").grid(
@@ -808,12 +794,14 @@ class Audio2TextApp:
         self.trans_backend_var = tk.StringVar(
             value=self.config.get(
                 "transcription", {}).get("backend", "auto"))
-        ttk.Combobox(frame, textvariable=self.trans_backend_var, width=20,
-                     state="readonly",
-                     values=["auto", "mlx", "faster-whisper"]).grid(
+        ttk.Combobox(
+            frame, textvariable=self.trans_backend_var, width=20,
+            state="readonly",
+            values=["auto", "mlx", "faster-whisper"]).grid(
             row=2, column=1, sticky="w", padx=(10, 0), pady=5)
 
         ttk.Button(frame, text="Транскрибировать",
+                   style="Accent.TButton",
                    command=self._run_transcribe).grid(
             row=3, column=0, columnspan=3, pady=20)
 
@@ -822,7 +810,8 @@ class Audio2TextApp:
     def _run_transcribe(self):
         path = self.trans_path_var.get().strip()
         if not path:
-            messagebox.showwarning("audio2text", "Выберите файл или папку.")
+            messagebox.showwarning("audio2text",
+                                   "Выберите файл или папку.")
             return
         self._apply_transcription_overrides()
         self._run_in_thread(self._do_transcribe, path)
@@ -846,7 +835,7 @@ class Audio2TextApp:
     # ── Diarize tab ────────────────────────────────────────────────────
 
     def _build_diarize_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=20)
+        frame = ttk.Frame(notebook, padding=18)
         notebook.add(frame, text="  Диаризация  ")
 
         ttk.Label(frame, text="Файл / папка:").grid(
@@ -855,28 +844,31 @@ class Audio2TextApp:
         ttk.Entry(frame, textvariable=self.diar_path_var).grid(
             row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
 
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=0, column=2, padx=(5, 0), pady=5)
-        ttk.Button(btn_frame, text="Файл", style="Secondary.TButton",
+        bf = ttk.Frame(frame)
+        bf.grid(row=0, column=2, padx=(5, 0), pady=5)
+        ttk.Button(bf, text="Файл",
                    command=lambda: self._pick_audio_file(
                        self.diar_path_var)).pack(side="left", padx=1)
-        ttk.Button(btn_frame, text="Папка", style="Secondary.TButton",
+        ttk.Button(bf, text="Папка",
                    command=lambda: self._pick_dir(
                        self.diar_path_var)).pack(side="left", padx=1)
 
         ttk.Label(frame, text="Мин. спикеров:").grid(
             row=1, column=0, sticky="w", pady=5)
         self.diar_min_var = tk.StringVar(value="")
-        ttk.Entry(frame, textvariable=self.diar_min_var, width=6).grid(
+        ttk.Entry(frame, textvariable=self.diar_min_var,
+                  width=6).grid(
             row=1, column=1, sticky="w", padx=(10, 0), pady=5)
 
         ttk.Label(frame, text="Макс. спикеров:").grid(
             row=2, column=0, sticky="w", pady=5)
         self.diar_max_var = tk.StringVar(value="")
-        ttk.Entry(frame, textvariable=self.diar_max_var, width=6).grid(
+        ttk.Entry(frame, textvariable=self.diar_max_var,
+                  width=6).grid(
             row=2, column=1, sticky="w", padx=(10, 0), pady=5)
 
         ttk.Button(frame, text="Диаризовать",
+                   style="Accent.TButton",
                    command=self._run_diarize).grid(
             row=3, column=0, columnspan=3, pady=20)
 
@@ -885,13 +877,13 @@ class Audio2TextApp:
     def _run_diarize(self):
         path = self.diar_path_var.get().strip()
         if not path:
-            messagebox.showwarning("audio2text", "Выберите файл или папку.")
+            messagebox.showwarning("audio2text",
+                                   "Выберите файл или папку.")
             return
         self._run_in_thread(self._do_diarize, path)
 
     def _do_diarize(self, path: str):
         from processor import diarize_file, transcribe_file, SUPPORTED_AUDIO
-
         cfg_d = self.config.setdefault("diarization", {})
         min_sp = self.diar_min_var.get().strip()
         max_sp = self.diar_max_var.get().strip()
@@ -901,20 +893,18 @@ class Audio2TextApp:
             cfg_d["max_speakers"] = int(max_sp)
 
         p = Path(path)
-        files = [p] if p.is_file() else sorted(
+        files = ([p] if p.is_file() else sorted(
             f for f in p.iterdir()
-            if f.suffix.lower() in SUPPORTED_AUDIO)
-
+            if f.suffix.lower() in SUPPORTED_AUDIO))
         for f in files:
             result = transcribe_file(str(f), self.config)
             diarize_file(str(f), self.config, transcription=result)
-
         self.log_queue.put("Диаризация завершена.")
 
     # ── Process tab ────────────────────────────────────────────────────
 
     def _build_process_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=20)
+        frame = ttk.Frame(notebook, padding=18)
         notebook.add(frame, text="  Pipeline  ")
 
         ttk.Label(frame, text="Файл / папка:").grid(
@@ -923,24 +913,26 @@ class Audio2TextApp:
         ttk.Entry(frame, textvariable=self.proc_path_var).grid(
             row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
 
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=0, column=2, padx=(5, 0), pady=5)
-        ttk.Button(btn_frame, text="Файл", style="Secondary.TButton",
+        bf = ttk.Frame(frame)
+        bf.grid(row=0, column=2, padx=(5, 0), pady=5)
+        ttk.Button(bf, text="Файл",
                    command=lambda: self._pick_audio_file(
                        self.proc_path_var)).pack(side="left", padx=1)
-        ttk.Button(btn_frame, text="Папка", style="Secondary.TButton",
+        ttk.Button(bf, text="Папка",
                    command=lambda: self._pick_dir(
                        self.proc_path_var)).pack(side="left", padx=1)
 
-        desc = (
-            "Полный pipeline: транскрибация + диаризация + суммаризация.\n"
-            "Настройки берутся из вкладки Настройки и config.yaml."
-        )
-        ttk.Label(frame, text=desc, wraplength=500, justify="left",
-                  style="Dim.TLabel").grid(
+        ttk.Label(
+            frame,
+            text="Полный pipeline: транскрибация + диаризация "
+                 "+ суммаризация.\n"
+                 "Настройки берутся из вкладки Настройки и config.yaml.",
+            wraplength=500, justify="left",
+            style="Dim.TLabel").grid(
             row=1, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
         ttk.Button(frame, text="Запустить pipeline",
+                   style="Accent.TButton",
                    command=self._run_process).grid(
             row=2, column=0, columnspan=3, pady=20)
 
@@ -949,7 +941,8 @@ class Audio2TextApp:
     def _run_process(self):
         path = self.proc_path_var.get().strip()
         if not path:
-            messagebox.showwarning("audio2text", "Выберите файл или папку.")
+            messagebox.showwarning("audio2text",
+                                   "Выберите файл или папку.")
             return
         self._apply_transcription_overrides()
         self._run_in_thread(self._do_process, path)
@@ -966,15 +959,16 @@ class Audio2TextApp:
     # ── Settings tab ───────────────────────────────────────────────────
 
     def _build_settings_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=20)
+        frame = ttk.Frame(notebook, padding=18)
         notebook.add(frame, text="  Настройки  ")
 
-        canvas = tk.Canvas(frame, highlightthickness=0, bg=SURFACE)
+        canvas = tk.Canvas(frame, highlightthickness=0, bg=GLASS)
         scrollbar = ttk.Scrollbar(
             frame, orient="vertical", command=canvas.yview)
         inner = ttk.Frame(canvas, padding=5)
         inner.bind("<Configure>",
-                   lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+                   lambda e: canvas.configure(
+                       scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=inner, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.pack(side="left", fill="both", expand=True)
@@ -987,63 +981,47 @@ class Audio2TextApp:
 
         # ── Transcription ──
         ttk.Label(inner, text="Транскрибация",
-                  style="Title.TLabel").grid(
+                  style="Section.TLabel").grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
         row += 1
 
-        ttk.Label(inner, text="Backend:").grid(
-            row=row, column=0, sticky="w", pady=3)
-        self.set_backend_var = tk.StringVar(
-            value=cfg_t.get("backend", "auto"))
-        ttk.Combobox(inner, textvariable=self.set_backend_var, width=20,
-                     state="readonly",
-                     values=["auto", "mlx", "faster-whisper"]).grid(
-            row=row, column=1, sticky="w", padx=(10, 0), pady=3)
-        row += 1
-
-        ttk.Label(inner, text="MLX модель:").grid(
-            row=row, column=0, sticky="w", pady=3)
-        self.set_mlx_model_var = tk.StringVar(
-            value=cfg_t.get("mlx_model",
-                            "mlx-community/whisper-large-v3-turbo"))
-        ttk.Entry(inner, textvariable=self.set_mlx_model_var,
-                  width=45).grid(
-            row=row, column=1, sticky="ew", padx=(10, 0), pady=3)
-        row += 1
-
-        ttk.Label(inner, text="FW модель:").grid(
-            row=row, column=0, sticky="w", pady=3)
-        self.set_fw_model_var = tk.StringVar(
-            value=cfg_t.get("fw_model", "large-v3-turbo"))
-        ttk.Entry(inner, textvariable=self.set_fw_model_var,
-                  width=30).grid(
-            row=row, column=1, sticky="ew", padx=(10, 0), pady=3)
-        row += 1
-
-        ttk.Label(inner, text="Язык:").grid(
-            row=row, column=0, sticky="w", pady=3)
-        self.set_lang_var = tk.StringVar(
-            value=cfg_t.get("language", "ru"))
-        ttk.Combobox(inner, textvariable=self.set_lang_var, width=10,
-                     values=["ru", "en", "auto", "de", "fr",
-                             "es", "zh", "ja"]).grid(
-            row=row, column=1, sticky="w", padx=(10, 0), pady=3)
-        row += 1
-
-        ttk.Label(inner, text="Beam size:").grid(
-            row=row, column=0, sticky="w", pady=3)
-        self.set_beam_var = tk.StringVar(
-            value=str(cfg_t.get("beam_size", 5)))
-        ttk.Entry(inner, textvariable=self.set_beam_var, width=6).grid(
-            row=row, column=1, sticky="w", padx=(10, 0), pady=3)
-        row += 1
+        for label, var_name, default, widget_type, opts in [
+            ("Backend:", "set_backend_var",
+             cfg_t.get("backend", "auto"), "combo",
+             {"values": ["auto", "mlx", "faster-whisper"],
+              "width": 20, "state": "readonly"}),
+            ("MLX модель:", "set_mlx_model_var",
+             cfg_t.get("mlx_model",
+                        "mlx-community/whisper-large-v3-turbo"),
+             "entry", {"width": 45}),
+            ("FW модель:", "set_fw_model_var",
+             cfg_t.get("fw_model", "large-v3-turbo"),
+             "entry", {"width": 30}),
+            ("Язык:", "set_lang_var",
+             cfg_t.get("language", "ru"), "combo",
+             {"values": ["ru", "en", "auto", "de", "fr",
+                         "es", "zh", "ja"], "width": 10}),
+            ("Beam size:", "set_beam_var",
+             str(cfg_t.get("beam_size", 5)),
+             "entry", {"width": 6}),
+        ]:
+            ttk.Label(inner, text=label).grid(
+                row=row, column=0, sticky="w", pady=3)
+            v = tk.StringVar(value=default)
+            setattr(self, var_name, v)
+            cls = ttk.Combobox if widget_type == "combo" else ttk.Entry
+            w = cls(inner, textvariable=v, **opts)
+            w.grid(row=row, column=1, sticky=(
+                "w" if opts.get("width", 50) < 20 else "ew"),
+                   padx=(10, 0), pady=3)
+            row += 1
 
         # ── Diarization ──
         ttk.Separator(inner, orient="horizontal").grid(
             row=row, column=0, columnspan=2, sticky="ew", pady=10)
         row += 1
         ttk.Label(inner, text="Диаризация",
-                  style="Title.TLabel").grid(
+                  style="Section.TLabel").grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
         row += 1
 
@@ -1069,7 +1047,7 @@ class Audio2TextApp:
             row=row, column=0, columnspan=2, sticky="ew", pady=10)
         row += 1
         ttk.Label(inner, text="Суммаризация",
-                  style="Title.TLabel").grid(
+                  style="Section.TLabel").grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
         row += 1
 
@@ -1084,9 +1062,10 @@ class Audio2TextApp:
         ttk.Label(inner, text="Контекст:").grid(
             row=row, column=0, sticky="w", pady=3)
         self.set_sum_context_var = tk.StringVar(
-            value=cfg_s.get("context",
-                            "IT-компания, сфера аналитики данных. "
-                            "Используй IT-терминологию."))
+            value=cfg_s.get(
+                "context",
+                "IT-компания, сфера аналитики данных. "
+                "Используй IT-терминологию."))
         ttk.Entry(inner, textvariable=self.set_sum_context_var,
                   width=50).grid(
             row=row, column=1, sticky="ew", padx=(10, 0), pady=3)
@@ -1105,22 +1084,19 @@ class Audio2TextApp:
         row += 1
 
         ttk.Button(inner, text="Информация о системе",
-                   style="Secondary.TButton",
                    command=self._show_info).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=5)
         row += 1
-
         ttk.Button(inner, text="Аудиоустройства",
-                   style="Secondary.TButton",
                    command=self._show_devices).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=5)
         row += 1
 
-        # Apply
         ttk.Separator(inner, orient="horizontal").grid(
             row=row, column=0, columnspan=2, sticky="ew", pady=10)
         row += 1
         ttk.Button(inner, text="Применить настройки",
+                   style="Accent.TButton",
                    command=self._apply_settings).grid(
             row=row, column=0, columnspan=2, pady=5)
 
@@ -1149,7 +1125,6 @@ class Audio2TextApp:
 
     def _apply_transcription_overrides(self):
         cfg_t = self.config.setdefault("transcription", {})
-
         if hasattr(self, "trans_lang_var"):
             lang = self.trans_lang_var.get()
             if lang:
@@ -1158,7 +1133,6 @@ class Audio2TextApp:
             be = self.trans_backend_var.get()
             if be:
                 cfg_t["backend"] = be
-
         if hasattr(self, "set_backend_var"):
             cfg_t["backend"] = self.set_backend_var.get()
             cfg_t["mlx_model"] = self.set_mlx_model_var.get()
@@ -1183,33 +1157,30 @@ class Audio2TextApp:
     # ── Blinking red dot ──────────────────────────────────────────────
 
     def _do_blink(self, canvas, dot_id, flag_attr):
-        """Мигание красной точки пока flag_attr == True."""
         if not getattr(self, flag_attr, False):
             canvas.itemconfigure(dot_id, state="hidden")
             return
         try:
-            current = canvas.itemcget(dot_id, "state")
+            cur = canvas.itemcget(dot_id, "state")
         except tk.TclError:
             return
-        new_state = "hidden" if current == "normal" else "normal"
-        canvas.itemconfigure(dot_id, state=new_state)
+        canvas.itemconfigure(
+            dot_id, state="hidden" if cur == "normal" else "normal")
         self.root.after(
             500, lambda: self._do_blink(canvas, dot_id, flag_attr))
 
     # ── Open folder ───────────────────────────────────────────────────
 
     def _open_recordings_folder(self):
-        folder = Path(
-            self.config.get("recording", {}).get("output_dir", "recordings"))
+        folder = Path(self.config.get(
+            "recording", {}).get("output_dir", "recordings"))
         folder.mkdir(parents=True, exist_ok=True)
         folder = folder.resolve()
-        system = platform.system()
-        if system == "Darwin":
-            subprocess.Popen(["open", str(folder)])
-        elif system == "Windows":
-            subprocess.Popen(["explorer", str(folder)])
-        else:
-            subprocess.Popen(["xdg-open", str(folder)])
+        sys = platform.system()
+        cmd = (["open"] if sys == "Darwin"
+               else ["explorer"] if sys == "Windows"
+               else ["xdg-open"])
+        subprocess.Popen(cmd + [str(folder)])
 
     # ── Helpers ────────────────────────────────────────────────────────
 
@@ -1217,13 +1188,13 @@ class Audio2TextApp:
         exts = " ".join(f"*{e}" for e in sorted(SUPPORTED_AUDIO))
         path = filedialog.askopenfilename(
             title="Выберите аудиофайл",
-            filetypes=[("Аудио", exts), ("Все файлы", "*.*")],
-        )
+            filetypes=[("Аудио", exts), ("Все файлы", "*.*")])
         if path:
             var.set(path)
 
     def _pick_dir(self, var: tk.StringVar):
-        path = filedialog.askdirectory(title="Выберите папку с аудио")
+        path = filedialog.askdirectory(
+            title="Выберите папку с аудио")
         if path:
             var.set(path)
 
@@ -1235,18 +1206,16 @@ class Audio2TextApp:
 
     def _run_in_thread(self, target, *args):
         if self._running_task and self._running_task.is_alive():
-            messagebox.showwarning(
-                "audio2text",
-                "Задача уже выполняется, дождитесь завершения.")
+            messagebox.showwarning("audio2text",
+                                   "Задача уже выполняется.")
             return
-
         def wrapper():
             try:
                 target(*args)
             except Exception as e:
                 self.log_queue.put(f"Ошибка: {e}")
-
-        self._running_task = threading.Thread(target=wrapper, daemon=True)
+        self._running_task = threading.Thread(
+            target=wrapper, daemon=True)
         self._running_task.start()
 
     def run(self):
