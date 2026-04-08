@@ -1,4 +1,4 @@
-"""audio2text — GUI в стиле macOS Tahoe Liquid Glass."""
+"""audio2text — GUI (VSCode-style dark theme)."""
 
 from __future__ import annotations
 
@@ -14,21 +14,19 @@ from pathlib import Path
 from processor import load_config, SUPPORTED_AUDIO
 
 
-# ── macOS Tahoe Liquid Glass palette ──────────────────────────────────────────
+# ── VSCode dark palette ───────────────────────────────────────────────────────
 
 BG = "#1e1e1e"
-GLASS = "#2d2d2d"
-GLASS_BORDER = "#4a4a4a"
-GLASS_HOVER = "#3a3a3a"
-GLASS_ACTIVE = "#454545"
-TEXT = "#ffffff"
-TEXT_DIM = "#999999"
-ACCENT = "#007AFF"
-ACCENT_HOVER = "#409CFF"
-RED = "#FF3B30"
-GREEN = "#30D158"
-INPUT_BG = "#1a1a1a"
-SEPARATOR = "#3a3a3a"
+PANEL = "#252526"
+BORDER = "#3c3c3c"
+HOVER = "#2a2d2e"
+ACTIVE = "#37373d"
+TEXT = "#cccccc"
+TEXT_DIM = "#858585"
+ACCENT = "#0078d4"
+ACCENT_HOVER = "#1177bb"
+RED = "#f44747"
+INPUT_BG = "#3c3c3c"
 _FONT = "Helvetica"
 _MONO = "Menlo" if platform.system() == "Darwin" else "Monospace"
 
@@ -49,7 +47,7 @@ class QueueHandler(logging.Handler):
 
 
 class Audio2TextApp:
-    """Главное окно приложения — Liquid Glass UI."""
+    """Главное окно приложения."""
 
     def __init__(self):
         self.root = tk.Tk()
@@ -68,113 +66,64 @@ class Audio2TextApp:
         self._build_ui()
         self._poll_log_queue()
 
-    # ── Liquid Glass theme ────────────────────────────────────────────
+    # ── Theme ────────────────────────────────────────────────────────
 
     def _setup_theme(self):
         s = ttk.Style()
         s.theme_use("clam")
 
-        s.configure(".", background=GLASS, foreground=TEXT,
-                    bordercolor=GLASS_BORDER, darkcolor=BG,
-                    lightcolor=GLASS_HOVER, troughcolor=INPUT_BG,
+        s.configure(".", background=PANEL, foreground=TEXT,
+                    bordercolor=BORDER, troughcolor=BG,
                     selectbackground=ACCENT, selectforeground="white",
-                    focuscolor=ACCENT, insertcolor=TEXT,
-                    font=(_FONT, 12))
+                    focuscolor="", insertcolor=TEXT, font=(_FONT, 12))
 
-        # ── Notebook (segmented control look) ──
-        s.configure("TNotebook", background=BG, borderwidth=0,
-                    tabmargins=[8, 8, 8, 0])
-        s.configure("TNotebook.Tab", background=BG, foreground=TEXT_DIM,
-                    padding=[20, 8], borderwidth=0, font=(_FONT, 12))
+        # Notebook
+        s.configure("TNotebook", background=BG, borderwidth=0)
+        s.configure("TNotebook.Tab", background=PANEL, foreground=TEXT_DIM,
+                    padding=[16, 6], borderwidth=0)
         s.map("TNotebook.Tab",
-              background=[("selected", GLASS)],
-              foreground=[("selected", TEXT)])
+              background=[("selected", ACTIVE)], foreground=[("selected", TEXT)])
 
-        # ── Frame ──
-        s.configure("TFrame", background=GLASS)
-        s.configure("Window.TFrame", background=BG)
+        # Frame / LabelFrame
+        s.configure("TFrame", background=PANEL)
+        s.configure("TLabelframe", background=PANEL, bordercolor=BORDER)
+        s.configure("TLabelframe.Label", background=PANEL, foreground=TEXT_DIM)
 
-        # ── LabelFrame (glass panel) ──
-        s.configure("TLabelframe", background=GLASS,
-                    bordercolor=GLASS_BORDER, borderwidth=1,
-                    relief="solid")
-        s.configure("TLabelframe.Label", background=GLASS,
-                    foreground=TEXT_DIM, font=(_FONT, 11))
+        # Label
+        s.configure("TLabel", background=PANEL, foreground=TEXT)
+        s.configure("Dim.TLabel", background=PANEL, foreground=TEXT_DIM, font=(_FONT, 10))
+        s.configure("Section.TLabel", background=PANEL, foreground=TEXT, font=(_FONT, 13, "bold"))
 
-        # ── Labels ──
-        s.configure("TLabel", background=GLASS, foreground=TEXT,
-                    font=(_FONT, 12))
-        s.configure("Dim.TLabel", background=GLASS, foreground=TEXT_DIM,
-                    font=(_FONT, 10))
-        s.configure("Section.TLabel", background=GLASS, foreground=TEXT,
-                    font=(_FONT, 13, "bold"))
+        # Button
+        s.configure("TButton", background=ACTIVE, foreground=TEXT,
+                    borderwidth=0, padding=[12, 5])
+        s.map("TButton", background=[("active", HOVER)])
 
-        # ── Button (glass capsule) ──
-        s.configure("TButton", background=GLASS_HOVER, foreground=TEXT,
-                    borderwidth=1, bordercolor=GLASS_BORDER,
-                    padding=[14, 6], font=(_FONT, 12), anchor="center")
-        s.map("TButton",
-              background=[("active", GLASS_ACTIVE),
-                          ("pressed", GLASS_ACTIVE)])
+        s.configure("Accent.TButton", background=ACCENT, foreground="white",
+                    borderwidth=0, padding=[14, 5])
+        s.map("Accent.TButton", background=[("active", ACCENT_HOVER)])
 
-        # ── Accent button (primary action) ──
-        s.configure("Accent.TButton", background=ACCENT,
-                    foreground="white", borderwidth=0,
-                    padding=[16, 7], font=(_FONT, 12, "bold"))
-        s.map("Accent.TButton",
-              background=[("active", ACCENT_HOVER),
-                          ("pressed", "#005EC4")])
+        s.configure("Danger.TButton", background=RED, foreground="white",
+                    borderwidth=0, padding=[14, 5])
+        s.map("Danger.TButton", background=[("active", "#d73a3a")])
 
-        # ── Danger button ──
-        s.configure("Danger.TButton", background=RED,
-                    foreground="white", borderwidth=0,
-                    padding=[16, 7], font=(_FONT, 12, "bold"))
-        s.map("Danger.TButton",
-              background=[("active", "#FF6961"),
-                          ("pressed", "#D32F2F")])
-
-        # ── Entry ──
-        s.configure("TEntry", fieldbackground=INPUT_BG, foreground=TEXT,
-                    bordercolor=GLASS_BORDER, insertcolor=TEXT,
-                    borderwidth=1, padding=[6, 5])
-        s.map("TEntry", bordercolor=[("focus", ACCENT)])
-
-        # ── Combobox ──
-        s.configure("TCombobox", fieldbackground=INPUT_BG, foreground=TEXT,
-                    background=GLASS_HOVER, bordercolor=GLASS_BORDER,
-                    arrowcolor=TEXT_DIM, padding=[6, 4])
-        s.map("TCombobox",
-              fieldbackground=[("readonly", INPUT_BG)],
-              bordercolor=[("focus", ACCENT)])
+        # Entry / Combobox / Spinbox
+        for w in ("TEntry", "TCombobox", "TSpinbox"):
+            s.configure(w, fieldbackground=INPUT_BG, foreground=TEXT,
+                        bordercolor=BORDER, insertcolor=TEXT, padding=[4, 3])
+            s.map(w, bordercolor=[("focus", ACCENT)])
+        s.map("TCombobox", fieldbackground=[("readonly", INPUT_BG)])
         self.root.option_add("*TCombobox*Listbox.background", INPUT_BG)
         self.root.option_add("*TCombobox*Listbox.foreground", TEXT)
         self.root.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
-        self.root.option_add("*TCombobox*Listbox.selectForeground", "white")
 
-        # ── Progressbar (accent fill) ──
-        s.configure("Horizontal.TProgressbar", troughcolor=INPUT_BG,
-                    background=ACCENT, borderwidth=0, thickness=5)
-
-        # ── Checkbutton ──
-        s.configure("TCheckbutton", background=GLASS, foreground=TEXT,
-                    indicatorcolor=INPUT_BG, font=(_FONT, 12))
-        s.map("TCheckbutton",
-              indicatorcolor=[("selected", ACCENT)],
-              background=[("active", GLASS)])
-
-        # ── Scrollbar ──
-        s.configure("TScrollbar", background=GLASS_HOVER,
-                    troughcolor=GLASS, borderwidth=0,
-                    arrowcolor=TEXT_DIM)
-
-        # ── Separator ──
-        s.configure("TSeparator", background=SEPARATOR)
-
-        # ── Spinbox ──
-        s.configure("TSpinbox", fieldbackground=INPUT_BG, foreground=TEXT,
-                    background=GLASS_HOVER, bordercolor=GLASS_BORDER,
-                    arrowcolor=TEXT_DIM)
-        s.map("TSpinbox", bordercolor=[("focus", ACCENT)])
+        # Progressbar / Checkbutton / Scrollbar / Separator
+        s.configure("Horizontal.TProgressbar", troughcolor=BG,
+                    background=ACCENT, borderwidth=0, thickness=4)
+        s.configure("TCheckbutton", background=PANEL, foreground=TEXT, indicatorcolor=INPUT_BG)
+        s.map("TCheckbutton", indicatorcolor=[("selected", ACCENT)], background=[("active", PANEL)])
+        s.configure("TScrollbar", background=ACTIVE, troughcolor=PANEL, borderwidth=0)
+        s.configure("TSeparator", background=BORDER)
 
     # ── Logging ───────────────────────────────────────────────────────
 
@@ -206,6 +155,7 @@ class Audio2TextApp:
         self._build_transcribe_tab(notebook)
         self._build_diarize_tab(notebook)
         self._build_process_tab(notebook)
+        self._build_summarize_tab(notebook)
         self._build_settings_tab(notebook)
 
         # Log panel (glass)
@@ -232,7 +182,10 @@ class Audio2TextApp:
         # Микрофон + VU
         self.rec_mic_enabled = tk.BooleanVar(value=True)
         ttk.Checkbutton(frame, text="Микрофон:",
-                        variable=self.rec_mic_enabled).grid(
+                        variable=self.rec_mic_enabled,
+                        command=lambda: self._toggle_combo(
+                            self.rec_mic_enabled, self.rec_mic_combo)
+                        ).grid(
             row=0, column=0, sticky="w", pady=(5, 0))
         self.rec_mic_var = tk.StringVar(value="По умолчанию")
         self.rec_mic_combo = ttk.Combobox(
@@ -249,7 +202,10 @@ class Audio2TextApp:
         # Системный звук + VU
         self.rec_sys_enabled = tk.BooleanVar(value=True)
         ttk.Checkbutton(frame, text="Системный звук:",
-                        variable=self.rec_sys_enabled).grid(
+                        variable=self.rec_sys_enabled,
+                        command=lambda: self._toggle_combo(
+                            self.rec_sys_enabled, self.rec_sys_combo)
+                        ).grid(
             row=2, column=0, sticky="w", pady=(5, 0))
         self.rec_sys_var = tk.StringVar(value="Не выбрано")
         self.rec_sys_combo = ttk.Combobox(
@@ -296,7 +252,7 @@ class Audio2TextApp:
         # Recording indicator (blinking red dot)
         self._rec_dot_canvas = tk.Canvas(
             btn_frame, width=14, height=14,
-            bg=GLASS, highlightthickness=0)
+            bg=PANEL, highlightthickness=0)
         self._rec_dot = self._rec_dot_canvas.create_oval(
             2, 2, 12, 12, fill=RED, outline="", state="hidden")
         self._rec_dot_canvas.pack(side="left", padx=(12, 0))
@@ -527,7 +483,10 @@ class Audio2TextApp:
         # Микрофон + VU
         self.live_mic_enabled = tk.BooleanVar(value=True)
         ttk.Checkbutton(frame, text="Микрофон:",
-                        variable=self.live_mic_enabled).grid(
+                        variable=self.live_mic_enabled,
+                        command=lambda: self._toggle_combo(
+                            self.live_mic_enabled, self.live_mic_combo)
+                        ).grid(
             row=0, column=0, sticky="w", pady=(5, 0))
         self.live_mic_var = tk.StringVar(value="По умолчанию")
         self.live_mic_combo = ttk.Combobox(
@@ -545,7 +504,10 @@ class Audio2TextApp:
         # Системный звук + VU
         self.live_sys_enabled = tk.BooleanVar(value=True)
         ttk.Checkbutton(frame, text="Системный звук:",
-                        variable=self.live_sys_enabled).grid(
+                        variable=self.live_sys_enabled,
+                        command=lambda: self._toggle_combo(
+                            self.live_sys_enabled, self.live_sys_combo)
+                        ).grid(
             row=2, column=0, sticky="w", pady=(5, 0))
         self.live_sys_var = tk.StringVar(value="Не выбрано")
         self.live_sys_combo = ttk.Combobox(
@@ -612,7 +574,7 @@ class Audio2TextApp:
 
         self._live_dot_canvas = tk.Canvas(
             btn_frame, width=14, height=14,
-            bg=GLASS, highlightthickness=0)
+            bg=PANEL, highlightthickness=0)
         self._live_dot = self._live_dot_canvas.create_oval(
             2, 2, 12, 12, fill=RED, outline="", state="hidden")
         self._live_dot_canvas.pack(side="left", padx=(12, 0))
@@ -901,6 +863,164 @@ class Audio2TextApp:
             diarize_file(str(f), self.config, transcription=result)
         self.log_queue.put("Диаризация завершена.")
 
+    # ── Summarize tab ────────────────────────────────────────────────
+
+    def _build_summarize_tab(self, notebook: ttk.Notebook):
+        frame = ttk.Frame(notebook, padding=18)
+        notebook.add(frame, text="  Суммаризация  ")
+
+        # Файл или вставить текст
+        top = ttk.Frame(frame)
+        top.grid(row=0, column=0, sticky="ew")
+
+        ttk.Label(top, text="Текстовый файл:").pack(side="left")
+        self.sum_path_var = tk.StringVar()
+        ttk.Entry(top, textvariable=self.sum_path_var).pack(
+            side="left", fill="x", expand=True, padx=(8, 0))
+        ttk.Button(top, text="Выбрать",
+                   command=self._pick_text_file).pack(
+            side="left", padx=(4, 0))
+        ttk.Button(top, text="Загрузить",
+                   command=self._load_text_file).pack(
+            side="left", padx=(4, 0))
+
+        # Задача
+        opts = ttk.Frame(frame)
+        opts.grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+        ttk.Label(opts, text="Задача:").pack(side="left")
+        self.sum_task_var = tk.StringVar(value="summarize")
+        ttk.Combobox(opts, textvariable=self.sum_task_var,
+                     state="readonly", width=18,
+                     values=["summarize", "format",
+                             "extract_actions"]).pack(
+            side="left", padx=(8, 0))
+
+        ttk.Label(opts, text="  Контекст:").pack(side="left", padx=(12, 0))
+        self.sum_context_var = tk.StringVar(
+            value=self.config.get("summarization", {}).get(
+                "context",
+                "IT-компания, аналитика данных. "
+                "Используй IT-терминологию."))
+        ttk.Entry(opts, textvariable=self.sum_context_var,
+                  width=40).pack(side="left", padx=(4, 0))
+
+        # Входной текст
+        ttk.Label(frame, text="Текст для суммаризации:").grid(
+            row=2, column=0, sticky="w", pady=(10, 2))
+
+        input_frame = ttk.Frame(frame)
+        input_frame.grid(row=3, column=0, sticky="nsew")
+
+        self.sum_input = tk.Text(
+            input_frame, height=10, wrap="word",
+            font=(_MONO, 11), bg=INPUT_BG, fg=TEXT,
+            insertbackground=TEXT, selectbackground=ACCENT,
+            selectforeground="white", relief="flat",
+            padx=8, pady=6, highlightthickness=0)
+        sb_in = ttk.Scrollbar(input_frame, command=self.sum_input.yview)
+        self.sum_input.configure(yscrollcommand=sb_in.set)
+        sb_in.pack(side="right", fill="y")
+        self.sum_input.pack(fill="both", expand=True)
+
+        # Кнопка
+        ttk.Button(frame, text="Суммаризировать",
+                   style="Accent.TButton",
+                   command=self._run_summarize).grid(
+            row=4, column=0, pady=10)
+
+        # Результат
+        ttk.Label(frame, text="Результат:").grid(
+            row=5, column=0, sticky="w", pady=(4, 2))
+
+        out_frame = ttk.Frame(frame)
+        out_frame.grid(row=6, column=0, sticky="nsew")
+
+        self.sum_output = tk.Text(
+            out_frame, height=10, wrap="word", state="disabled",
+            font=(_MONO, 11), bg=INPUT_BG, fg=TEXT,
+            insertbackground=TEXT, selectbackground=ACCENT,
+            selectforeground="white", relief="flat",
+            padx=8, pady=6, highlightthickness=0)
+        sb_out = ttk.Scrollbar(out_frame, command=self.sum_output.yview)
+        self.sum_output.configure(yscrollcommand=sb_out.set)
+        sb_out.pack(side="right", fill="y")
+        self.sum_output.pack(fill="both", expand=True)
+
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(3, weight=1)
+        frame.rowconfigure(6, weight=1)
+
+    def _pick_text_file(self):
+        path = filedialog.askopenfilename(
+            title="Выберите текстовый файл",
+            filetypes=[("Текст", "*.txt"), ("Все файлы", "*.*")])
+        if path:
+            self.sum_path_var.set(path)
+
+    def _load_text_file(self):
+        path = self.sum_path_var.get().strip()
+        if not path:
+            self._pick_text_file()
+            path = self.sum_path_var.get().strip()
+        if not path:
+            return
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+            self.sum_input.delete("1.0", "end")
+            self.sum_input.insert("1.0", text)
+            self._log(f"Загружено: {Path(path).name} "
+                      f"({len(text)} символов)")
+        except Exception as e:
+            self._log(f"Ошибка чтения: {e}")
+
+    def _run_summarize(self):
+        text = self.sum_input.get("1.0", "end").strip()
+        if not text:
+            messagebox.showwarning("audio2text",
+                                   "Введите или загрузите текст.")
+            return
+
+        # Обновить контекст и задачу в конфиге
+        self.config.setdefault("summarization", {})["context"] = \
+            self.sum_context_var.get()
+        self.config.setdefault("llm", {})["task"] = \
+            self.sum_task_var.get()
+
+        self._run_in_thread(self._do_summarize, text)
+
+    def _do_summarize(self, text: str):
+        cfg = self.config
+        llm_cfg = cfg.get("llm", {})
+        sum_cfg = cfg.get("summarization", {})
+
+        try:
+            if llm_cfg.get("enabled"):
+                from summariser import LLMSummarizer
+                s = LLMSummarizer(cfg)
+            elif sum_cfg.get("enabled"):
+                from summariser import Summarizer
+                s = Summarizer(cfg)
+            else:
+                self.log_queue.put(
+                    "Суммаризация отключена. Включите LLM или "
+                    "Summarization в Настройках / config.yaml")
+                return
+
+            result = s.summarize(text)
+
+            def show_result():
+                self.sum_output.configure(state="normal")
+                self.sum_output.delete("1.0", "end")
+                self.sum_output.insert("1.0", result)
+                self.sum_output.configure(state="disabled")
+
+            self.root.after(0, show_result)
+            self.log_queue.put(
+                f"Суммаризация завершена ({len(result)} символов)")
+        except Exception as e:
+            self.log_queue.put(f"Ошибка суммаризации: {e}")
+
     # ── Process tab ────────────────────────────────────────────────────
 
     def _build_process_tab(self, notebook: ttk.Notebook):
@@ -962,7 +1082,7 @@ class Audio2TextApp:
         frame = ttk.Frame(notebook, padding=18)
         notebook.add(frame, text="  Настройки  ")
 
-        canvas = tk.Canvas(frame, highlightthickness=0, bg=GLASS)
+        canvas = tk.Canvas(frame, highlightthickness=0, bg=PANEL)
         scrollbar = ttk.Scrollbar(
             frame, orient="vertical", command=canvas.yview)
         inner = ttk.Frame(canvas, padding=5)
@@ -1153,6 +1273,13 @@ class Audio2TextApp:
             self._log(str(sd.query_devices()))
         except Exception as e:
             self._log(f"Ошибка: {e}")
+
+    # ── Toggle combo on checkbox ─────────────────────────────────────
+
+    @staticmethod
+    def _toggle_combo(enabled_var: tk.BooleanVar, combo: ttk.Combobox):
+        """Включает/выключает комбобокс по состоянию галочки."""
+        combo.configure(state="readonly" if enabled_var.get() else "disabled")
 
     # ── Blinking red dot ──────────────────────────────────────────────
 
