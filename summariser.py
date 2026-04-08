@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 
 from logger import logger
+
+
+def _clean_transcript(text: str) -> str:
+    """Убирает таймкоды и метки спикеров из транскрипции."""
+    # [00:01-00:06] SPEAKER_02: текст  →  текст
+    text = re.sub(r"\[[\d:]+[-–][\d:]+\]\s*", "", text)
+    # SPEAKER_XX: текст  →  текст
+    text = re.sub(r"SPEAKER_\d+:\s*", "", text)
+    # Unknown: текст  →  текст
+    text = re.sub(r"Unknown:\s*", "", text)
+    # Убираем пустые строки подряд
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _detect_torch_device(preferred: str = "auto") -> str:
@@ -129,26 +143,32 @@ class LLMSummarizer:
 
     def _get_prompt(self, text: str) -> str:
         """Формирует промпт в зависимости от задачи."""
+        text = _clean_transcript(text)
+
         context_line = ""
         if self.context:
-            context_line = (
-                f"Контекст: {self.context}\n"
-                "Используй профессиональную терминологию из данной области.\n\n"
-            )
+            context_line = f"Контекст: {self.context}\n"
 
         prompts = {
             "summarize": (
                 f"{context_line}"
-                "Сделай краткое резюме этой встречи. Выдели основные темы и решения:\n\n"
+                "Ниже транскрипция рабочей встречи. "
+                "Сделай структурированное резюме на русском языке:\n"
+                "1. Основные обсуждаемые темы\n"
+                "2. Ключевые решения\n"
+                "3. Открытые вопросы\n\n"
+                "Транскрипция:\n"
             ),
             "format": (
                 f"{context_line}"
-                "Отформатируй эту транскрибацию встречи в читаемый вид с абзацами и заголовками:\n\n"
+                "Отформатируй эту транскрибацию встречи в читаемый вид "
+                "с абзацами и заголовками. Ответ на русском:\n\n"
             ),
             "extract_actions": (
                 f"{context_line}"
                 "Извлеки из транскрибации встречи список задач (action items) "
-                "с указанием ответственного (если упоминается):\n\n"
+                "с указанием ответственного (если упоминается). "
+                "Ответ на русском:\n\n"
             ),
         }
         prefix = prompts.get(self.task, prompts["summarize"])
@@ -182,7 +202,8 @@ class LLMSummarizer:
             self._mlx_model,
             self._mlx_tokenizer,
             prompt=prompt,
-            max_tokens=1024,
+            max_tokens=4096,
+            repetition_penalty=1.2,
         )
 
         logger.info(f"LLM завершил за {time.time() - start:.1f} сек")
@@ -196,7 +217,7 @@ class LLMSummarizer:
         response = client.chat.completions.create(
             model=self.api_model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
+            max_tokens=4096,
         )
         return response.choices[0].message.content
 

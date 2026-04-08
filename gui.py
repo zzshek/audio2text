@@ -797,9 +797,6 @@ class Audio2TextApp:
         ttk.Button(top, text="Выбрать",
                    command=self._pick_text_file).pack(
             side="left", padx=(4, 0))
-        ttk.Button(top, text="Загрузить",
-                   command=self._load_text_file).pack(
-            side="left", padx=(4, 0))
 
         # Задача
         opts = ttk.Frame(frame)
@@ -867,12 +864,10 @@ class Audio2TextApp:
             filetypes=[("Текст", "*.txt"), ("Все файлы", "*.*")])
         if path:
             self.sum_path_var.set(path)
+            self._load_text_file()
 
     def _load_text_file(self):
         path = self.sum_path_var.get().strip()
-        if not path:
-            self._pick_text_file()
-            path = self.sum_path_var.get().strip()
         if not path:
             return
         try:
