@@ -42,7 +42,7 @@ llm-api = [
 ]
 # Полная установка для Mac (Apple Silicon)
 mac = [
-    "audio2text[mlx,diarization,summarization]",
+    "audio2text[mlx,diarization,summarization,llm]",
 ]
 # Полная установка для NVIDIA
 nvidia = [
