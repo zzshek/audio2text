@@ -1,4 +1,4 @@
-"""audio2text — GUI (VSCode-style dark theme)."""
+"""audio2text — macOS GUI (tkinter/ttk)."""
 
 from __future__ import annotations
 
@@ -12,23 +12,6 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 
 from processor import load_config, SUPPORTED_AUDIO
-
-
-# ── VSCode dark palette ───────────────────────────────────────────────────────
-
-BG = "#1e1e1e"
-PANEL = "#252526"
-BORDER = "#3c3c3c"
-HOVER = "#2a2d2e"
-ACTIVE = "#37373d"
-TEXT = "#cccccc"
-TEXT_DIM = "#858585"
-ACCENT = "#0078d4"
-ACCENT_HOVER = "#1177bb"
-RED = "#f44747"
-INPUT_BG = "#3c3c3c"
-_FONT = "Helvetica"
-_MONO = "Menlo" if platform.system() == "Darwin" else "Monospace"
 
 
 # ── Logging handler → GUI ────────────────────────────────────────────────────
@@ -54,76 +37,22 @@ class Audio2TextApp:
         self.root.title("audio2text")
         self.root.geometry("860x700")
         self.root.minsize(720, 580)
-        self.root.configure(bg=BG)
+
+        # macOS native feel
         self.root.option_add("*tearOff", False)
+        try:
+            self.root.tk.call("tk::unsupported::MacWindowStyle", "style",
+                              self.root._w, "document", "closeBox collapseBox")
+        except tk.TclError:
+            pass
 
         self.config = load_config("config.yaml")
         self.log_queue: queue.Queue[str] = queue.Queue()
         self._running_task: threading.Thread | None = None
 
-        self._setup_theme()
         self._setup_logging()
         self._build_ui()
         self._poll_log_queue()
-
-    # ── Theme ────────────────────────────────────────────────────────
-
-    def _setup_theme(self):
-        s = ttk.Style()
-        s.theme_use("clam")
-
-        s.configure(".", background=PANEL, foreground=TEXT,
-                    bordercolor=BORDER, troughcolor=BG,
-                    selectbackground=ACCENT, selectforeground="white",
-                    focuscolor="", insertcolor=TEXT, font=(_FONT, 12))
-
-        # Notebook
-        s.configure("TNotebook", background=BG, borderwidth=0)
-        s.configure("TNotebook.Tab", background=PANEL, foreground=TEXT_DIM,
-                    padding=[16, 6], borderwidth=0)
-        s.map("TNotebook.Tab",
-              background=[("selected", ACTIVE)], foreground=[("selected", TEXT)])
-
-        # Frame / LabelFrame
-        s.configure("TFrame", background=PANEL)
-        s.configure("TLabelframe", background=PANEL, bordercolor=BORDER)
-        s.configure("TLabelframe.Label", background=PANEL, foreground=TEXT_DIM)
-
-        # Label
-        s.configure("TLabel", background=PANEL, foreground=TEXT)
-        s.configure("Dim.TLabel", background=PANEL, foreground=TEXT_DIM, font=(_FONT, 10))
-        s.configure("Section.TLabel", background=PANEL, foreground=TEXT, font=(_FONT, 13, "bold"))
-
-        # Button
-        s.configure("TButton", background=ACTIVE, foreground=TEXT,
-                    borderwidth=0, padding=[12, 5])
-        s.map("TButton", background=[("active", HOVER)])
-
-        s.configure("Accent.TButton", background=ACCENT, foreground="white",
-                    borderwidth=0, padding=[14, 5])
-        s.map("Accent.TButton", background=[("active", ACCENT_HOVER)])
-
-        s.configure("Danger.TButton", background=RED, foreground="white",
-                    borderwidth=0, padding=[14, 5])
-        s.map("Danger.TButton", background=[("active", "#d73a3a")])
-
-        # Entry / Combobox / Spinbox
-        for w in ("TEntry", "TCombobox", "TSpinbox"):
-            s.configure(w, fieldbackground=INPUT_BG, foreground=TEXT,
-                        bordercolor=BORDER, insertcolor=TEXT, padding=[4, 3])
-            s.map(w, bordercolor=[("focus", ACCENT)])
-        s.map("TCombobox", fieldbackground=[("readonly", INPUT_BG)])
-        self.root.option_add("*TCombobox*Listbox.background", INPUT_BG)
-        self.root.option_add("*TCombobox*Listbox.foreground", TEXT)
-        self.root.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
-
-        # Progressbar / Checkbutton / Scrollbar / Separator
-        s.configure("Horizontal.TProgressbar", troughcolor=BG,
-                    background=ACCENT, borderwidth=0, thickness=4)
-        s.configure("TCheckbutton", background=PANEL, foreground=TEXT, indicatorcolor=INPUT_BG)
-        s.map("TCheckbutton", indicatorcolor=[("selected", ACCENT)], background=[("active", PANEL)])
-        s.configure("TScrollbar", background=ACTIVE, troughcolor=PANEL, borderwidth=0)
-        s.configure("TSeparator", background=BORDER)
 
     # ── Logging ───────────────────────────────────────────────────────
 
@@ -164,10 +93,7 @@ class Audio2TextApp:
 
         self.log_text = tk.Text(
             log_frame, height=8, state="disabled", wrap="word",
-            font=(_MONO, 11), bg=INPUT_BG, fg=TEXT,
-            insertbackground=TEXT, selectbackground=ACCENT,
-            selectforeground="white", relief="flat", padx=8, pady=6,
-            highlightthickness=0)
+            font=("Menlo", 11))
         scrollbar = ttk.Scrollbar(log_frame, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
@@ -226,7 +152,7 @@ class Audio2TextApp:
         # Hint
         self.rec_hint_var = tk.StringVar(value="")
         ttk.Label(frame, textvariable=self.rec_hint_var,
-                  wraplength=500, style="Dim.TLabel").grid(
+                  wraplength=500, foreground="gray", font=("Helvetica", 10)).grid(
             row=4, column=0, columnspan=3, sticky="w", pady=(0, 5))
 
         self._refresh_all_devices()
@@ -238,7 +164,7 @@ class Audio2TextApp:
         ttk.Entry(frame, textvariable=self.rec_name_var).grid(
             row=5, column=1, sticky="ew", padx=(10, 0), pady=(8, 0))
         ttk.Label(frame, text="(опционально)",
-                  style="Dim.TLabel").grid(
+                  foreground="gray", font=("Helvetica", 10)).grid(
             row=5, column=2, padx=(8, 0), pady=(8, 0))
 
         # Buttons
@@ -252,14 +178,14 @@ class Audio2TextApp:
         # Recording indicator (blinking red dot)
         self._rec_dot_canvas = tk.Canvas(
             btn_frame, width=14, height=14,
-            bg=PANEL, highlightthickness=0)
+            bg=self.root.cget("bg"), highlightthickness=0)
         self._rec_dot = self._rec_dot_canvas.create_oval(
-            2, 2, 12, 12, fill=RED, outline="", state="hidden")
+            2, 2, 12, 12, fill="red", outline="", state="hidden")
         self._rec_dot_canvas.pack(side="left", padx=(12, 0))
 
         self.record_btn = ttk.Button(
             btn_frame, text="Начать запись",
-            style="Accent.TButton", command=self._toggle_record)
+            command=self._toggle_record)
         self.record_btn.pack(side="left", padx=(3, 5))
 
         ttk.Button(btn_frame, text="Открыть папку",
@@ -267,7 +193,7 @@ class Audio2TextApp:
             side="left", padx=5)
 
         self.record_status = ttk.Label(
-            btn_frame, text="", style="Dim.TLabel")
+            btn_frame, text="", foreground="gray", font=("Helvetica", 10))
         self.record_status.pack(side="left", padx=10)
 
         frame.columnconfigure(1, weight=1)
@@ -430,8 +356,7 @@ class Audio2TextApp:
         from recorder import Recorder
         self._recorder = Recorder(self.config)
         self._recording = True
-        self.record_btn.configure(text="Остановить",
-                                  style="Danger.TButton")
+        self.record_btn.configure(text="Остановить")
         self.record_status.configure(text="Идёт запись...")
         self._do_blink(self._rec_dot_canvas, self._rec_dot, "_recording")
 
@@ -468,8 +393,7 @@ class Audio2TextApp:
 
     def _on_record_done(self):
         self._recording = False
-        self.record_btn.configure(text="Начать запись",
-                                  style="Accent.TButton")
+        self.record_btn.configure(text="Начать запись")
         self.record_status.configure(text="")
         self.rec_mic_vu.set(0)
         self.rec_sys_vu.set(0)
@@ -529,7 +453,7 @@ class Audio2TextApp:
         # Hint
         self.live_hint_var = tk.StringVar(value="")
         ttk.Label(frame, textvariable=self.live_hint_var,
-                  wraplength=500, style="Dim.TLabel").grid(
+                  wraplength=500, foreground="gray", font=("Helvetica", 10)).grid(
             row=4, column=0, columnspan=3, sticky="w", pady=(0, 5))
 
         # Заполняем списки
@@ -561,7 +485,7 @@ class Audio2TextApp:
         ttk.Entry(frame, textvariable=self.live_name_var).grid(
             row=6, column=1, sticky="ew", padx=(10, 0), pady=(8, 0))
         ttk.Label(frame, text="(опционально)",
-                  style="Dim.TLabel").grid(
+                  foreground="gray", font=("Helvetica", 10)).grid(
             row=6, column=2, padx=(8, 0), pady=(8, 0))
 
         # Buttons
@@ -574,14 +498,14 @@ class Audio2TextApp:
 
         self._live_dot_canvas = tk.Canvas(
             btn_frame, width=14, height=14,
-            bg=PANEL, highlightthickness=0)
+            bg=self.root.cget("bg"), highlightthickness=0)
         self._live_dot = self._live_dot_canvas.create_oval(
-            2, 2, 12, 12, fill=RED, outline="", state="hidden")
+            2, 2, 12, 12, fill="red", outline="", state="hidden")
         self._live_dot_canvas.pack(side="left", padx=(12, 0))
 
         self.live_btn = ttk.Button(
             btn_frame, text="Live Запись",
-            style="Accent.TButton", command=self._toggle_live)
+            command=self._toggle_live)
         self.live_btn.pack(side="left", padx=(3, 5))
 
         ttk.Button(btn_frame, text="Открыть папку",
@@ -589,7 +513,7 @@ class Audio2TextApp:
             side="left", padx=5)
 
         self.live_status = ttk.Label(
-            btn_frame, text="", style="Dim.TLabel")
+            btn_frame, text="", foreground="gray", font=("Helvetica", 10))
         self.live_status.pack(side="left", padx=10)
 
         # Live transcription (glass panel)
@@ -601,10 +525,7 @@ class Audio2TextApp:
 
         self.live_text = tk.Text(
             trans_frame, height=10, state="disabled", wrap="word",
-            font=(_MONO, 11), bg=INPUT_BG, fg=TEXT,
-            insertbackground=TEXT, selectbackground=ACCENT,
-            selectforeground="white", relief="flat",
-            padx=8, pady=6, highlightthickness=0)
+            font=("Menlo", 11))
         scrollbar = ttk.Scrollbar(
             trans_frame, command=self.live_text.yview)
         self.live_text.configure(yscrollcommand=scrollbar.set)
@@ -635,8 +556,7 @@ class Audio2TextApp:
         import threading as _threading
         self._live_recording = True
         self._live_stop_event = _threading.Event()
-        self.live_btn.configure(text="Остановить",
-                                style="Danger.TButton")
+        self.live_btn.configure(text="Остановить")
         self.live_status.configure(text="Загрузка модели...")
         self._do_blink(self._live_dot_canvas, self._live_dot,
                        "_live_recording")
@@ -700,8 +620,7 @@ class Audio2TextApp:
     def _on_live_done(self):
         self._poll_live_text()
         self._live_recording = False
-        self.live_btn.configure(text="Live Запись",
-                                style="Accent.TButton")
+        self.live_btn.configure(text="Live Запись")
         self.live_status.configure(text="")
         self.live_mic_vu.set(0)
         self.live_sys_vu.set(0)
@@ -763,7 +682,6 @@ class Audio2TextApp:
             row=2, column=1, sticky="w", padx=(10, 0), pady=5)
 
         ttk.Button(frame, text="Транскрибировать",
-                   style="Accent.TButton",
                    command=self._run_transcribe).grid(
             row=3, column=0, columnspan=3, pady=20)
 
@@ -830,7 +748,6 @@ class Audio2TextApp:
             row=2, column=1, sticky="w", padx=(10, 0), pady=5)
 
         ttk.Button(frame, text="Диаризовать",
-                   style="Accent.TButton",
                    command=self._run_diarize).grid(
             row=3, column=0, columnspan=3, pady=20)
 
@@ -914,10 +831,7 @@ class Audio2TextApp:
 
         self.sum_input = tk.Text(
             input_frame, height=10, wrap="word",
-            font=(_MONO, 11), bg=INPUT_BG, fg=TEXT,
-            insertbackground=TEXT, selectbackground=ACCENT,
-            selectforeground="white", relief="flat",
-            padx=8, pady=6, highlightthickness=0)
+            font=("Menlo", 11))
         sb_in = ttk.Scrollbar(input_frame, command=self.sum_input.yview)
         self.sum_input.configure(yscrollcommand=sb_in.set)
         sb_in.pack(side="right", fill="y")
@@ -925,7 +839,6 @@ class Audio2TextApp:
 
         # Кнопка
         ttk.Button(frame, text="Суммаризировать",
-                   style="Accent.TButton",
                    command=self._run_summarize).grid(
             row=4, column=0, pady=10)
 
@@ -938,10 +851,7 @@ class Audio2TextApp:
 
         self.sum_output = tk.Text(
             out_frame, height=10, wrap="word", state="disabled",
-            font=(_MONO, 11), bg=INPUT_BG, fg=TEXT,
-            insertbackground=TEXT, selectbackground=ACCENT,
-            selectforeground="white", relief="flat",
-            padx=8, pady=6, highlightthickness=0)
+            font=("Menlo", 11))
         sb_out = ttk.Scrollbar(out_frame, command=self.sum_output.yview)
         self.sum_output.configure(yscrollcommand=sb_out.set)
         sb_out.pack(side="right", fill="y")
@@ -1009,6 +919,15 @@ class Audio2TextApp:
 
             result = s.summarize(text)
 
+            # Сохранить в файл рядом с исходным
+            saved = ""
+            src = self.sum_path_var.get().strip()
+            if src:
+                p = Path(src)
+                out = p.parent / f"{p.stem}_summary.txt"
+                out.write_text(result, encoding="utf-8")
+                saved = f" → {out}"
+
             def show_result():
                 self.sum_output.configure(state="normal")
                 self.sum_output.delete("1.0", "end")
@@ -1017,7 +936,8 @@ class Audio2TextApp:
 
             self.root.after(0, show_result)
             self.log_queue.put(
-                f"Суммаризация завершена ({len(result)} символов)")
+                f"Суммаризация завершена "
+                f"({len(result)} символов){saved}")
         except Exception as e:
             self.log_queue.put(f"Ошибка суммаризации: {e}")
 
@@ -1048,11 +968,10 @@ class Audio2TextApp:
                  "+ суммаризация.\n"
                  "Настройки берутся из вкладки Настройки и config.yaml.",
             wraplength=500, justify="left",
-            style="Dim.TLabel").grid(
+            foreground="gray", font=("Helvetica", 10)).grid(
             row=1, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
         ttk.Button(frame, text="Запустить pipeline",
-                   style="Accent.TButton",
                    command=self._run_process).grid(
             row=2, column=0, columnspan=3, pady=20)
 
@@ -1082,7 +1001,7 @@ class Audio2TextApp:
         frame = ttk.Frame(notebook, padding=18)
         notebook.add(frame, text="  Настройки  ")
 
-        canvas = tk.Canvas(frame, highlightthickness=0, bg=PANEL)
+        canvas = tk.Canvas(frame, highlightthickness=0, bg=self.root.cget("bg"))
         scrollbar = ttk.Scrollbar(
             frame, orient="vertical", command=canvas.yview)
         inner = ttk.Frame(canvas, padding=5)
@@ -1101,7 +1020,7 @@ class Audio2TextApp:
 
         # ── Transcription ──
         ttk.Label(inner, text="Транскрибация",
-                  style="Section.TLabel").grid(
+                  font=("Helvetica", 13, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
         row += 1
 
@@ -1141,7 +1060,7 @@ class Audio2TextApp:
             row=row, column=0, columnspan=2, sticky="ew", pady=10)
         row += 1
         ttk.Label(inner, text="Диаризация",
-                  style="Section.TLabel").grid(
+                  font=("Helvetica", 13, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
         row += 1
 
@@ -1167,7 +1086,7 @@ class Audio2TextApp:
             row=row, column=0, columnspan=2, sticky="ew", pady=10)
         row += 1
         ttk.Label(inner, text="Суммаризация",
-                  style="Section.TLabel").grid(
+                  font=("Helvetica", 13, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
         row += 1
 
@@ -1194,7 +1113,7 @@ class Audio2TextApp:
         ttk.Label(inner,
                   text="Контекст помогает модели использовать "
                        "правильную терминологию",
-                  style="Dim.TLabel").grid(
+                  foreground="gray", font=("Helvetica", 10)).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
         row += 1
 
@@ -1216,7 +1135,6 @@ class Audio2TextApp:
             row=row, column=0, columnspan=2, sticky="ew", pady=10)
         row += 1
         ttk.Button(inner, text="Применить настройки",
-                   style="Accent.TButton",
                    command=self._apply_settings).grid(
             row=row, column=0, columnspan=2, pady=5)
 
