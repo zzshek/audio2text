@@ -35,8 +35,8 @@ class Audio2TextApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("audio2text")
-        self.root.geometry("860x700")
-        self.root.minsize(720, 580)
+        self.root.geometry("640x560")
+        self.root.minsize(560, 480)
 
         # macOS native feel
         self.root.option_add("*tearOff", False)
@@ -102,99 +102,101 @@ class Audio2TextApp:
     # ── Record tab ─────────────────────────────────────────────────────
 
     def _build_record_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=18)
+        frame = ttk.Frame(notebook, padding=12)
         notebook.add(frame, text="  Запись  ")
 
-        # Микрофон + VU
+        # ── Правая часть: устройства ──
+        dev_frame = ttk.Frame(frame)
+        dev_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+        # Микрофон
         self.rec_mic_enabled = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frame, text="Микрофон:",
+        ttk.Checkbutton(dev_frame, text="Микрофон:",
                         variable=self.rec_mic_enabled,
                         command=lambda: self._toggle_combo(
                             self.rec_mic_enabled, self.rec_mic_combo)
-                        ).grid(
-            row=0, column=0, sticky="w", pady=(5, 0))
+                        ).grid(row=0, column=0, sticky="w")
         self.rec_mic_var = tk.StringVar(value="По умолчанию")
         self.rec_mic_combo = ttk.Combobox(
-            frame, textvariable=self.rec_mic_var, state="readonly", width=50)
-        self.rec_mic_combo.grid(
-            row=0, column=1, sticky="ew", padx=(10, 0), pady=(5, 0))
+            dev_frame, textvariable=self.rec_mic_var,
+            state="readonly", width=25)
+        self.rec_mic_combo.grid(row=0, column=1, sticky="ew", padx=(5, 0))
 
         self.rec_mic_vu = tk.DoubleVar(value=0)
-        ttk.Progressbar(frame, variable=self.rec_mic_vu,
+        ttk.Progressbar(dev_frame, variable=self.rec_mic_vu,
                         maximum=1.0, mode="determinate").grid(
-            row=1, column=1, columnspan=2, sticky="ew",
-            padx=(10, 0), pady=(2, 8))
+            row=1, column=0, columnspan=3, sticky="ew", pady=(2, 6))
 
-        # Системный звук + VU
+        # Системный звук
         self.rec_sys_enabled = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frame, text="Системный звук:",
+        ttk.Checkbutton(dev_frame, text="Системный звук:",
                         variable=self.rec_sys_enabled,
                         command=lambda: self._toggle_combo(
                             self.rec_sys_enabled, self.rec_sys_combo)
-                        ).grid(
-            row=2, column=0, sticky="w", pady=(5, 0))
+                        ).grid(row=2, column=0, sticky="w")
         self.rec_sys_var = tk.StringVar(value="Не выбрано")
         self.rec_sys_combo = ttk.Combobox(
-            frame, textvariable=self.rec_sys_var, state="readonly", width=50)
-        self.rec_sys_combo.grid(
-            row=2, column=1, sticky="ew", padx=(10, 0), pady=(5, 0))
+            dev_frame, textvariable=self.rec_sys_var,
+            state="readonly", width=25)
+        self.rec_sys_combo.grid(row=2, column=1, sticky="ew", padx=(5, 0))
+
+        ttk.Button(dev_frame, text="↻", width=3,
+                   command=self._refresh_all_devices).grid(
+            row=2, column=2, padx=(4, 0))
 
         self.rec_sys_vu = tk.DoubleVar(value=0)
-        ttk.Progressbar(frame, variable=self.rec_sys_vu,
+        ttk.Progressbar(dev_frame, variable=self.rec_sys_vu,
                         maximum=1.0, mode="determinate").grid(
-            row=3, column=1, columnspan=2, sticky="ew",
-            padx=(10, 0), pady=(2, 8))
-
-        ttk.Button(frame, text="Обновить",
-                   command=self._refresh_all_devices).grid(
-            row=0, column=2, rowspan=2, padx=(8, 0), pady=5)
+            row=3, column=0, columnspan=3, sticky="ew", pady=(2, 6))
 
         # Hint
         self.rec_hint_var = tk.StringVar(value="")
-        ttk.Label(frame, textvariable=self.rec_hint_var,
-                  wraplength=500, foreground="gray", font=("Helvetica", 10)).grid(
-            row=4, column=0, columnspan=3, sticky="w", pady=(0, 5))
+        ttk.Label(dev_frame, textvariable=self.rec_hint_var,
+                  wraplength=350, foreground="gray",
+                  font=("Helvetica", 10)).grid(
+            row=4, column=0, columnspan=3, sticky="w")
+
+        # Название
+        ttk.Label(dev_frame, text="Название:").grid(
+            row=5, column=0, sticky="w", pady=(6, 0))
+        self.rec_name_var = tk.StringVar(value="")
+        ttk.Entry(dev_frame, textvariable=self.rec_name_var).grid(
+            row=5, column=1, columnspan=2, sticky="ew",
+            padx=(5, 0), pady=(6, 0))
+
+        dev_frame.columnconfigure(1, weight=1)
 
         self._refresh_all_devices()
 
-        # Название файла
-        ttk.Label(frame, text="Название:").grid(
-            row=5, column=0, sticky="w", pady=(8, 0))
-        self.rec_name_var = tk.StringVar(value="")
-        ttk.Entry(frame, textvariable=self.rec_name_var).grid(
-            row=5, column=1, sticky="ew", padx=(10, 0), pady=(8, 0))
-        ttk.Label(frame, text="(опционально)",
-                  foreground="gray", font=("Helvetica", 10)).grid(
-            row=5, column=2, padx=(8, 0), pady=(8, 0))
-
-        # Buttons
+        # ── Левая часть: кнопки в колонку ──
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=6, column=0, columnspan=3, pady=15)
+        btn_frame.grid(row=0, column=0, sticky="nw")
 
-        ttk.Button(btn_frame, text="Проверка звука",
+        ttk.Button(btn_frame, text="Проверка звука", width=16,
                    command=self._test_record_devices).pack(
-            side="left", padx=5)
+            pady=(0, 4), anchor="w")
 
-        # Recording indicator (blinking red dot)
+        rec_row = ttk.Frame(btn_frame)
+        rec_row.pack(pady=(0, 4), anchor="w")
         self._rec_dot_canvas = tk.Canvas(
-            btn_frame, width=14, height=14,
+            rec_row, width=12, height=12,
             bg=self.root.cget("bg"), highlightthickness=0)
         self._rec_dot = self._rec_dot_canvas.create_oval(
-            2, 2, 12, 12, fill="red", outline="", state="hidden")
-        self._rec_dot_canvas.pack(side="left", padx=(12, 0))
-
+            1, 1, 11, 11, fill="red", outline="", state="hidden")
+        self._rec_dot_canvas.pack(side="left", padx=(0, 3))
         self.record_btn = ttk.Button(
-            btn_frame, text="Начать запись",
+            rec_row, text="Начать запись", width=14,
             command=self._toggle_record)
-        self.record_btn.pack(side="left", padx=(3, 5))
+        self.record_btn.pack(side="left")
 
-        ttk.Button(btn_frame, text="Открыть папку",
+        ttk.Button(btn_frame, text="Открыть папку", width=16,
                    command=self._open_recordings_folder).pack(
-            side="left", padx=5)
+            pady=(0, 4), anchor="w")
 
         self.record_status = ttk.Label(
-            btn_frame, text="", foreground="gray", font=("Helvetica", 10))
-        self.record_status.pack(side="left", padx=10)
+            btn_frame, text="", foreground="gray",
+            font=("Helvetica", 10))
+        self.record_status.pack(anchor="w", pady=(4, 0))
 
         frame.columnconfigure(1, weight=1)
         self._recorder = None
@@ -401,60 +403,76 @@ class Audio2TextApp:
     # ── Live tab ───────────────────────────────────────────────────────
 
     def _build_live_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=18)
+        frame = ttk.Frame(notebook, padding=12)
         notebook.add(frame, text="  Live  ")
 
-        # Микрофон + VU
+        # ── Правая часть: устройства ──
+        dev_frame = ttk.Frame(frame)
+        dev_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+        # Микрофон
         self.live_mic_enabled = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frame, text="Микрофон:",
+        ttk.Checkbutton(dev_frame, text="Микрофон:",
                         variable=self.live_mic_enabled,
                         command=lambda: self._toggle_combo(
                             self.live_mic_enabled, self.live_mic_combo)
-                        ).grid(
-            row=0, column=0, sticky="w", pady=(5, 0))
+                        ).grid(row=0, column=0, sticky="w")
         self.live_mic_var = tk.StringVar(value="По умолчанию")
         self.live_mic_combo = ttk.Combobox(
-            frame, textvariable=self.live_mic_var,
-            state="readonly", width=50)
-        self.live_mic_combo.grid(
-            row=0, column=1, sticky="ew", padx=(10, 0), pady=(5, 0))
+            dev_frame, textvariable=self.live_mic_var,
+            state="readonly", width=25)
+        self.live_mic_combo.grid(row=0, column=1, sticky="ew", padx=(5, 0))
 
         self.live_mic_vu = tk.DoubleVar(value=0)
-        ttk.Progressbar(frame, variable=self.live_mic_vu,
+        ttk.Progressbar(dev_frame, variable=self.live_mic_vu,
                         maximum=1.0, mode="determinate").grid(
-            row=1, column=1, columnspan=2, sticky="ew",
-            padx=(10, 0), pady=(2, 8))
+            row=1, column=0, columnspan=3, sticky="ew", pady=(2, 6))
 
-        # Системный звук + VU
+        # Системный звук
         self.live_sys_enabled = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frame, text="Системный звук:",
+        ttk.Checkbutton(dev_frame, text="Системный звук:",
                         variable=self.live_sys_enabled,
                         command=lambda: self._toggle_combo(
                             self.live_sys_enabled, self.live_sys_combo)
-                        ).grid(
-            row=2, column=0, sticky="w", pady=(5, 0))
+                        ).grid(row=2, column=0, sticky="w")
         self.live_sys_var = tk.StringVar(value="Не выбрано")
         self.live_sys_combo = ttk.Combobox(
-            frame, textvariable=self.live_sys_var,
-            state="readonly", width=50)
-        self.live_sys_combo.grid(
-            row=2, column=1, sticky="ew", padx=(10, 0), pady=(5, 0))
+            dev_frame, textvariable=self.live_sys_var,
+            state="readonly", width=25)
+        self.live_sys_combo.grid(row=2, column=1, sticky="ew", padx=(5, 0))
+
+        ttk.Button(dev_frame, text="↻", width=3,
+                   command=self._refresh_all_devices).grid(
+            row=2, column=2, padx=(4, 0))
 
         self.live_sys_vu = tk.DoubleVar(value=0)
-        ttk.Progressbar(frame, variable=self.live_sys_vu,
+        ttk.Progressbar(dev_frame, variable=self.live_sys_vu,
                         maximum=1.0, mode="determinate").grid(
-            row=3, column=1, columnspan=2, sticky="ew",
-            padx=(10, 0), pady=(2, 8))
-
-        ttk.Button(frame, text="Обновить",
-                   command=self._refresh_all_devices).grid(
-            row=0, column=2, rowspan=2, padx=(8, 0), pady=5)
+            row=3, column=0, columnspan=3, sticky="ew", pady=(2, 6))
 
         # Hint
         self.live_hint_var = tk.StringVar(value="")
-        ttk.Label(frame, textvariable=self.live_hint_var,
-                  wraplength=500, foreground="gray", font=("Helvetica", 10)).grid(
-            row=4, column=0, columnspan=3, sticky="w", pady=(0, 5))
+        ttk.Label(dev_frame, textvariable=self.live_hint_var,
+                  wraplength=350, foreground="gray",
+                  font=("Helvetica", 10)).grid(
+            row=4, column=0, columnspan=3, sticky="w")
+
+        # Чанк + Название
+        ttk.Label(dev_frame, text="Чанк (сек):").grid(
+            row=5, column=0, sticky="w", pady=(4, 0))
+        self.live_chunk_var = tk.StringVar(value="30")
+        ttk.Spinbox(dev_frame, textvariable=self.live_chunk_var,
+                    from_=10, to=120, increment=5, width=5).grid(
+            row=5, column=1, sticky="w", padx=(5, 0), pady=(4, 0))
+
+        ttk.Label(dev_frame, text="Название:").grid(
+            row=6, column=0, sticky="w", pady=(4, 0))
+        self.live_name_var = tk.StringVar(value="")
+        ttk.Entry(dev_frame, textvariable=self.live_name_var).grid(
+            row=6, column=1, columnspan=2, sticky="ew",
+            padx=(5, 0), pady=(4, 0))
+
+        dev_frame.columnconfigure(1, weight=1)
 
         # Заполняем списки
         devs = self._get_input_device_list()
@@ -470,51 +488,35 @@ class Audio2TextApp:
                 "Для захвата системного звука установите BlackHole: "
                 "brew install blackhole-2ch")
 
-        # Chunk size
-        ttk.Label(frame, text="Чанк (сек):").grid(
-            row=5, column=0, sticky="w", pady=5)
-        self.live_chunk_var = tk.StringVar(value="30")
-        ttk.Spinbox(frame, textvariable=self.live_chunk_var,
-                    from_=10, to=120, increment=5, width=6).grid(
-            row=5, column=1, sticky="w", padx=(10, 0), pady=5)
-
-        # Название файла
-        ttk.Label(frame, text="Название:").grid(
-            row=6, column=0, sticky="w", pady=(8, 0))
-        self.live_name_var = tk.StringVar(value="")
-        ttk.Entry(frame, textvariable=self.live_name_var).grid(
-            row=6, column=1, sticky="ew", padx=(10, 0), pady=(8, 0))
-        ttk.Label(frame, text="(опционально)",
-                  foreground="gray", font=("Helvetica", 10)).grid(
-            row=6, column=2, padx=(8, 0), pady=(8, 0))
-
-        # Buttons
+        # ── Левая часть: кнопки в колонку ──
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=7, column=0, columnspan=3, pady=12)
+        btn_frame.grid(row=0, column=0, sticky="nw")
 
-        ttk.Button(btn_frame, text="Проверка звука",
+        ttk.Button(btn_frame, text="Проверка звука", width=16,
                    command=self._test_live_devices).pack(
-            side="left", padx=5)
+            pady=(0, 4), anchor="w")
 
+        rec_row = ttk.Frame(btn_frame)
+        rec_row.pack(pady=(0, 4), anchor="w")
         self._live_dot_canvas = tk.Canvas(
-            btn_frame, width=14, height=14,
+            rec_row, width=12, height=12,
             bg=self.root.cget("bg"), highlightthickness=0)
         self._live_dot = self._live_dot_canvas.create_oval(
-            2, 2, 12, 12, fill="red", outline="", state="hidden")
-        self._live_dot_canvas.pack(side="left", padx=(12, 0))
-
+            1, 1, 11, 11, fill="red", outline="", state="hidden")
+        self._live_dot_canvas.pack(side="left", padx=(0, 3))
         self.live_btn = ttk.Button(
-            btn_frame, text="Live Запись",
+            rec_row, text="Live Запись", width=14,
             command=self._toggle_live)
-        self.live_btn.pack(side="left", padx=(3, 5))
+        self.live_btn.pack(side="left")
 
-        ttk.Button(btn_frame, text="Открыть папку",
+        ttk.Button(btn_frame, text="Открыть папку", width=16,
                    command=self._open_recordings_folder).pack(
-            side="left", padx=5)
+            pady=(0, 4), anchor="w")
 
         self.live_status = ttk.Label(
-            btn_frame, text="", foreground="gray", font=("Helvetica", 10))
-        self.live_status.pack(side="left", padx=10)
+            btn_frame, text="", foreground="gray",
+            font=("Helvetica", 10))
+        self.live_status.pack(anchor="w", pady=(4, 0))
 
         # Live transcription (glass panel)
         trans_frame = ttk.LabelFrame(
