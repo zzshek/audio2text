@@ -206,7 +206,7 @@ class LLMSummarizer:
             self._mlx_tokenizer,
             prompt=prompt,
             max_tokens=4096,
-            repetition_penalty=1.2,
+            repetition_context_size=256,
         )
 
         logger.info(f"LLM завершил за {time.time() - start:.1f} сек")

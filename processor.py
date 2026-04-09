@@ -103,17 +103,25 @@ def process_file(audio_path: str, config: dict) -> None:
     total_start = time.time()
 
     # 1. Транскрибация
+    logger.info("[1/4] Транскрибация...")
+    t1 = time.time()
     result = transcribe_file(str(audio), config)
+    logger.info(f"[1/4] Транскрибация — {time.time() - t1:.1f} сек")
 
     # 2. Диаризация
     diar_cfg = config.get("diarization", {})
     if diar_cfg.get("enabled", True) and diar_cfg.get("hf_token"):
+        logger.info("[2/4] Диаризация...")
+        t2 = time.time()
         try:
             diarize_file(str(audio), config, transcription=result)
+            logger.info(f"[2/4] Диаризация — {time.time() - t2:.1f} сек")
         except Exception as e:
             logger.error(f"Ошибка диаризации: {e}")
     elif diar_cfg.get("enabled", True):
-        logger.warning("Диаризация включена, но hf_token не указан — пропускаем")
+        logger.warning("[2/4] Диаризация — пропуск (нет hf_token)")
+    else:
+        logger.info("[2/4] Диаризация — отключена")
 
     # 3. Суммаризация
     summary = ""
@@ -122,18 +130,28 @@ def process_file(audio_path: str, config: dict) -> None:
     if sum_cfg.get("enabled") or llm_cfg.get("enabled"):
         txt_path = audio.with_suffix(".txt")
         if txt_path.exists():
+            logger.info("[3/4] Суммаризация...")
+            t3 = time.time()
             try:
                 summary = summarize_file(str(txt_path), config)
+                logger.info(f"[3/4] Суммаризация — {time.time() - t3:.1f} сек")
             except Exception as e:
                 logger.error(f"Ошибка суммаризации: {e}")
+    else:
+        logger.info("[3/4] Суммаризация — отключена")
 
     # 4. Экспорт в Obsidian
     obs_cfg = config.get("obsidian", {})
     if obs_cfg.get("enabled") and summary:
+        logger.info("[4/4] Экспорт в Obsidian...")
+        t4 = time.time()
         try:
             export_obsidian_note(audio, summary, config)
+            logger.info(f"[4/4] Obsidian — {time.time() - t4:.1f} сек")
         except Exception as e:
             logger.error(f"Ошибка экспорта Obsidian: {e}")
+    else:
+        logger.info("[4/4] Obsidian — отключён")
 
     elapsed = time.time() - total_start
     logger.info(f"═══ Готово: {audio.name} ({elapsed:.1f} сек) ═══")
