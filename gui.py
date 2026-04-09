@@ -94,10 +94,26 @@ class Audio2TextApp:
             font=("Menlo", 10))
         # Скрыт — каждая вкладка имеет свой лог
 
-    def _make_log_widget(self, parent) -> tk.Text:
-        """Создаёт лог-виджет внутри вкладки."""
+    def _make_log_widget(self, parent, row=None, col_span=3) -> tk.Text:
+        """Создаёт лог-виджет внутри вкладки. Авто-определяет grid vs pack."""
         log_frame = ttk.LabelFrame(parent, text="Лог")
-        log_frame.pack(fill="both", expand=True, padx=0, pady=(6, 0))
+        if row is not None:
+            log_frame.grid(row=row, column=0, columnspan=col_span,
+                           sticky="nsew", pady=(6, 0))
+        else:
+            # Определяем следующую свободную строку grid
+            try:
+                max_row = max(
+                    (info["row"] for child in parent.winfo_children()
+                     if (info := child.grid_info())),
+                    default=-1)
+                log_frame.grid(row=max_row + 1, column=0,
+                               columnspan=col_span, sticky="nsew",
+                               pady=(6, 0))
+                parent.rowconfigure(max_row + 1, weight=1)
+            except Exception:
+                log_frame.pack(fill="both", expand=True,
+                               padx=0, pady=(6, 0))
         log = tk.Text(log_frame, height=6, state="disabled",
                       wrap="word", font=("Menlo", 10))
         sb = ttk.Scrollbar(log_frame, command=log.yview)
