@@ -116,15 +116,24 @@ def process_file(audio_path: str, config: dict) -> None:
         logger.warning("Диаризация включена, но hf_token не указан — пропускаем")
 
     # 3. Суммаризация
+    summary = ""
     sum_cfg = config.get("summarization", {})
     llm_cfg = config.get("llm", {})
     if sum_cfg.get("enabled") or llm_cfg.get("enabled"):
         txt_path = audio.with_suffix(".txt")
         if txt_path.exists():
             try:
-                summarize_file(str(txt_path), config)
+                summary = summarize_file(str(txt_path), config)
             except Exception as e:
                 logger.error(f"Ошибка суммаризации: {e}")
+
+    # 4. Экспорт в Obsidian
+    obs_cfg = config.get("obsidian", {})
+    if obs_cfg.get("enabled") and summary:
+        try:
+            export_obsidian_note(audio, summary, config)
+        except Exception as e:
+            logger.error(f"Ошибка экспорта Obsidian: {e}")
 
     elapsed = time.time() - total_start
     logger.info(f"═══ Готово: {audio.name} ({elapsed:.1f} сек) ═══")
@@ -145,6 +154,121 @@ def process_directory(dir_path: str, config: dict) -> None:
     logger.info(f"Найдено {len(audio_files)} аудиофайлов в {dir_path}")
     for f in audio_files:
         process_file(str(f), config)
+
+
+# ── Obsidian export ───────────────────────────────────────────────────────
+
+
+def _parse_meeting_meta(audio_path: Path) -> dict:
+    """Извлекает метаданные встречи из имени файла и сопутствующих файлов."""
+    stem = audio_path.stem  # "2026-04-08 11:00 Gen AI"
+    parts = stem.split(" ", 2)
+    date = parts[0] if len(parts) > 0 else ""
+    time_str = parts[1] if len(parts) > 1 else ""
+    title = parts[2] if len(parts) > 2 else stem
+
+    # Количество спикеров из _diar.txt
+    speakers = 0
+    diar_file = audio_path.parent / f"{stem}_diar.txt"
+    if diar_file.exists():
+        text = diar_file.read_text(encoding="utf-8")
+        import re
+        speakers = len(set(re.findall(r"SPEAKER_\d+", text)))
+
+    return {
+        "date": date,
+        "time": time_str,
+        "title": title,
+        "speakers": speakers,
+        "source": audio_path.name,
+    }
+
+
+def export_obsidian_note(
+    audio_path: Path, summary: str, config: dict
+) -> Path | None:
+    """Экспортирует саммари встречи как Markdown-заметку в Obsidian vault."""
+    obs_cfg = config.get("obsidian", {})
+    vault_path = obs_cfg.get("vault_path", "")
+    folder = obs_cfg.get("folder", "Meetings")
+
+    if not vault_path:
+        logger.warning("Obsidian vault_path не указан")
+        return None
+
+    vault = Path(vault_path)
+    if not vault.exists():
+        logger.warning(f"Obsidian vault не найден: {vault}")
+        return None
+
+    meta = _parse_meeting_meta(audio_path)
+    target_dir = vault / folder
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Имя файла: 2026-04-08 Gen AI.md
+    safe_title = meta["title"].replace("/", "-").replace("\\", "-")
+    md_name = f"{meta['date']} {safe_title}.md"
+    md_path = target_dir / md_name
+
+    # Frontmatter
+    lines = [
+        "---",
+        f"date: {meta['date']}",
+        f"time: \"{meta['time']}\"",
+        f"type: meeting",
+    ]
+    if meta["speakers"]:
+        lines.append(f"speakers: {meta['speakers']}")
+    lines += [
+        f"source: \"{meta['source']}\"",
+        f"tags: [meeting]",
+        "---",
+        "",
+        f"# {safe_title} — {meta['date']}",
+        "",
+    ]
+
+    # Саммари (уже в markdown формате от LLM)
+    lines.append(summary)
+
+    md_path.write_text("\n".join(lines), encoding="utf-8")
+    logger.info(f"Obsidian: {md_path}")
+    return md_path
+
+
+# ── Incremental processing ────────────────────────────────────────────────
+
+
+def find_unprocessed(config: dict) -> list[Path]:
+    """Находит аудиофайлы в recordings/ без готового _summary.txt."""
+    output_dir = Path(
+        config.get("recording", {}).get("output_dir", "recordings"))
+    if not output_dir.exists():
+        return []
+
+    unprocessed = []
+    for day_dir in sorted(output_dir.iterdir()):
+        if not day_dir.is_dir():
+            continue
+        for f in sorted(day_dir.iterdir()):
+            if not f.is_file() or f.suffix.lower() not in SUPPORTED_AUDIO:
+                continue
+            summary_file = f.parent / f"{f.stem}_summary.txt"
+            if not summary_file.exists():
+                unprocessed.append(f)
+    return unprocessed
+
+
+def process_new(config: dict) -> int:
+    """Обрабатывает все новые (без саммари) записи. Возвращает кол-во."""
+    files = find_unprocessed(config)
+    if not files:
+        logger.info("Нет новых записей для обработки")
+        return 0
+    logger.info(f"Найдено {len(files)} необработанных записей")
+    for f in files:
+        process_file(str(f), config)
+    return len(files)
 
 
 def show_info(config: dict) -> str:

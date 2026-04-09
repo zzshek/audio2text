@@ -968,9 +968,13 @@ class Audio2TextApp:
             foreground="gray", font=("Helvetica", 10)).grid(
             row=1, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
-        ttk.Button(frame, text="Запустить pipeline",
-                   command=self._run_process).grid(
-            row=2, column=0, columnspan=3, pady=20)
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=2, column=0, columnspan=3, pady=15)
+
+        ttk.Button(btn_row, text="Запустить pipeline",
+                   command=self._run_process).pack(side="left", padx=5)
+        ttk.Button(btn_row, text="Обработать новые",
+                   command=self._run_process_new).pack(side="left", padx=5)
 
         frame.columnconfigure(1, weight=1)
 
@@ -991,6 +995,17 @@ class Audio2TextApp:
         elif p.is_dir():
             process_directory(str(p), self.config)
         self.log_queue.put("Pipeline завершён.")
+
+    def _run_process_new(self):
+        self._apply_transcription_overrides()
+        self._run_in_thread(self._do_process_new)
+
+    def _do_process_new(self):
+        from processor import process_new
+        n = process_new(self.config)
+        self.log_queue.put(
+            f"Обработано {n} новых записей." if n
+            else "Нет новых записей.")
 
     # ── Settings tab ───────────────────────────────────────────────────
 
@@ -1114,6 +1129,47 @@ class Audio2TextApp:
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
         row += 1
 
+        # ── Obsidian ──
+        ttk.Separator(inner, orient="horizontal").grid(
+            row=row, column=0, columnspan=2, sticky="ew", pady=10)
+        row += 1
+        ttk.Label(inner, text="Obsidian",
+                  font=("Helvetica", 13, "bold")).grid(
+            row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        row += 1
+
+        cfg_o = self.config.get("obsidian", {})
+
+        ttk.Label(inner, text="Включён:").grid(
+            row=row, column=0, sticky="w", pady=3)
+        self.set_obs_enabled = tk.BooleanVar(
+            value=cfg_o.get("enabled", False))
+        ttk.Checkbutton(inner, variable=self.set_obs_enabled).grid(
+            row=row, column=1, sticky="w", padx=(10, 0), pady=3)
+        row += 1
+
+        ttk.Label(inner, text="Vault:").grid(
+            row=row, column=0, sticky="w", pady=3)
+        vault_row = ttk.Frame(inner)
+        vault_row.grid(row=row, column=1, sticky="ew", padx=(10, 0), pady=3)
+        self.set_obs_vault_var = tk.StringVar(
+            value=cfg_o.get("vault_path", ""))
+        ttk.Entry(vault_row, textvariable=self.set_obs_vault_var).pack(
+            side="left", fill="x", expand=True)
+        ttk.Button(vault_row, text="...", width=3,
+                   command=self._pick_obsidian_vault).pack(
+            side="left", padx=(4, 0))
+        row += 1
+
+        ttk.Label(inner, text="Папка:").grid(
+            row=row, column=0, sticky="w", pady=3)
+        self.set_obs_folder_var = tk.StringVar(
+            value=cfg_o.get("folder", "Meetings"))
+        ttk.Entry(inner, textvariable=self.set_obs_folder_var,
+                  width=20).grid(
+            row=row, column=1, sticky="w", padx=(10, 0), pady=3)
+        row += 1
+
         # ── System info ──
         ttk.Separator(inner, orient="horizontal").grid(
             row=row, column=0, columnspan=2, sticky="ew", pady=10)
@@ -1156,6 +1212,11 @@ class Audio2TextApp:
         cfg_s["enabled"] = self.set_sum_enabled.get()
         cfg_s["context"] = self.set_sum_context_var.get()
 
+        cfg_o = self.config.setdefault("obsidian", {})
+        cfg_o["enabled"] = self.set_obs_enabled.get()
+        cfg_o["vault_path"] = self.set_obs_vault_var.get()
+        cfg_o["folder"] = self.set_obs_folder_var.get()
+
         self._log("Настройки применены.")
 
     def _apply_transcription_overrides(self):
@@ -1188,6 +1249,11 @@ class Audio2TextApp:
             self._log(str(sd.query_devices()))
         except Exception as e:
             self._log(f"Ошибка: {e}")
+
+    def _pick_obsidian_vault(self):
+        path = filedialog.askdirectory(title="Выберите Obsidian vault")
+        if path:
+            self.set_obs_vault_var.set(path)
 
     # ── Toggle combo on checkbox ─────────────────────────────────────
 

@@ -73,3 +73,9 @@ llm:
   api_base_url: ""       # для совместимых API
 
   task: summarize        # summarize | format | extract_actions
+
+# Экспорт в Obsidian
+obsidian:
+  enabled: false
+  vault_path: ""         # путь к Obsidian vault, например /Users/me/Obsidian
+  folder: "Meetings"     # папка внутри vault для заметок встреч
