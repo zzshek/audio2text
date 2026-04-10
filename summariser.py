@@ -29,13 +29,16 @@ def _truncate_repetitions(text: str, max_repeats: int = 3) -> str:
 
 
 def _clean_transcript(text: str) -> str:
-    """Убирает таймкоды и метки спикеров из транскрипции."""
-    # [00:01-00:06] SPEAKER_02: текст  →  текст
+    """Чистит таймкоды, оставляет спикеров в читаемом виде."""
+    # [00:01-00:06] SPEAKER_02: текст  →  Спикер 2: текст
     text = re.sub(r"\[[\d:]+[-–][\d:]+\]\s*", "", text)
-    # SPEAKER_XX: текст  →  текст
-    text = re.sub(r"SPEAKER_\d+:\s*", "", text)
-    # Unknown: текст  →  текст
-    text = re.sub(r"Unknown:\s*", "", text)
+    # SPEAKER_02 → Спикер 2 (убираем ведущий ноль)
+    text = re.sub(
+        r"SPEAKER_0*(\d+)",
+        lambda m: f"Спикер {m.group(1)}",
+        text)
+    # Unknown → Спикер ?
+    text = re.sub(r"Unknown:", "Спикер ?:", text)
     # Убираем пустые строки подряд
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
