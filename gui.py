@@ -46,6 +46,16 @@ class Audio2TextApp:
         except tk.TclError:
             pass
 
+        # App icon
+        icon_path = Path(__file__).parent / "icon.png"
+        if icon_path.exists():
+            try:
+                icon = tk.PhotoImage(file=str(icon_path))
+                self.root.iconphoto(True, icon)
+                self._icon = icon  # prevent GC
+            except Exception:
+                pass
+
         self.config = load_config("config.yaml")
         self.log_queue: queue.Queue[str] = queue.Queue()
         self._running_task: threading.Thread | None = None
