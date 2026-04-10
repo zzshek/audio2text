@@ -309,10 +309,7 @@ class Audio2TextApp:
             if sys_var and sys_var.get() == "Не выбрано" and virtual_found:
                 sys_var.set(virtual_found)
             if hint_var:
-                hint_var.set(
-                    "" if virtual_found else
-                    "Для захвата системного звука установите BlackHole: "
-                    "brew install blackhole-2ch")
+                hint_var.set("")
 
     @staticmethod
     def _parse_device_id(selection: str) -> int | None:
@@ -563,9 +560,7 @@ class Audio2TextApp:
                 self.live_sys_var.set(f"{dev_id}: {name}")
                 break
         else:
-            self.live_hint_var.set(
-                "Для захвата системного звука установите BlackHole: "
-                "brew install blackhole-2ch")
+            pass
 
         # ── Левая часть: кнопки в колонку ──
         btn_frame = ttk.Frame(frame)

@@ -14,8 +14,10 @@
 ### 1. Системные зависимости
 
 ```bash
-brew install ffmpeg portaudio
+brew install ffmpeg portaudio blackhole-2ch
 ```
+
+> `blackhole-2ch` — виртуальное аудиоустройство для захвата системного звука (Zoom, Teams, браузер).
 
 ### 2. Клонирование и установка
 
