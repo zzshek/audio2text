@@ -9,23 +9,38 @@ from pathlib import Path
 from logger import logger
 
 
-def _truncate_repetitions(text: str, max_repeats: int = 3) -> str:
+def _truncate_repetitions(text: str) -> str:
     """Обрезает текст если модель начала зацикливаться."""
-    lines = text.split("\n")
+    # Разбиваем на блоки по --- или пустым строкам
+    blocks = re.split(r"\n---\n|\n{3,}", text)
+    seen = set()
     result = []
-    repeat_count = 0
-    prev_line = None
+    for block in blocks:
+        key = block.strip()
+        if not key:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(block)
+    text = "\n\n".join(result)
+
+    # Также убираем повторяющиеся строки подряд
+    lines = text.split("\n")
+    out = []
+    prev = None
+    dup_count = 0
     for line in lines:
-        stripped = line.strip()
-        if stripped == prev_line and stripped:
-            repeat_count += 1
-            if repeat_count >= max_repeats:
+        s = line.strip()
+        if s == prev and s:
+            dup_count += 1
+            if dup_count >= 2:
                 continue
         else:
-            repeat_count = 0
-        prev_line = stripped
-        result.append(line)
-    return "\n".join(result)
+            dup_count = 0
+        prev = s
+        out.append(line)
+    return "\n".join(out)
 
 
 def _clean_transcript(text: str) -> str:
