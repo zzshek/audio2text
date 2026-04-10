@@ -35,8 +35,8 @@ class Audio2TextApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("audio2text")
-        self.root.geometry("640x560")
-        self.root.minsize(560, 480)
+        self.root.geometry("750x600")
+        self.root.minsize(700, 520)
 
         # macOS native feel
         self.root.option_add("*tearOff", False)
@@ -235,6 +235,10 @@ class Audio2TextApp:
 
         ttk.Button(btn_frame, text="Открыть папку", width=16,
                    command=self._open_recordings_folder).pack(
+            pady=(0, 4), anchor="w")
+
+        ttk.Button(btn_frame, text="Pipeline", width=16,
+                   command=self._run_record_pipeline).pack(
             pady=(0, 4), anchor="w")
 
         self.record_status = ttk.Label(
@@ -444,6 +448,36 @@ class Audio2TextApp:
         self.record_status.configure(text="")
         self.rec_mic_vu.set(0)
         self.rec_sys_vu.set(0)
+
+    def _run_record_pipeline(self):
+        """Запуск pipeline для последнего записанного файла."""
+        output_dir = Path(
+            self.config.get("recording", {}).get("output_dir", "recordings"))
+        if not output_dir.exists():
+            messagebox.showwarning("audio2text", "Папка recordings не найдена.")
+            return
+        # Находим последний аудиофайл
+        latest = None
+        for day_dir in sorted(output_dir.iterdir(), reverse=True):
+            if not day_dir.is_dir():
+                continue
+            for f in sorted(day_dir.iterdir(), reverse=True):
+                if f.is_file() and f.suffix.lower() in SUPPORTED_AUDIO:
+                    latest = f
+                    break
+            if latest:
+                break
+        if not latest:
+            messagebox.showwarning("audio2text", "Нет аудиофайлов.")
+            return
+        self._log(f"Pipeline: {latest.name}")
+        self._apply_transcription_overrides()
+        self._run_in_thread(self._do_record_pipeline, str(latest))
+
+    def _do_record_pipeline(self, path: str):
+        from processor import process_file
+        process_file(path, self.config)
+        self.log_queue.put("Pipeline завершён.")
 
     # ── Live tab ───────────────────────────────────────────────────────
 

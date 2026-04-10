@@ -10,9 +10,13 @@ from logger import logger
 
 
 def _truncate_repetitions(text: str) -> str:
-    """Обрезает текст если модель начала зацикливаться."""
-    # Разбиваем на блоки по --- или пустым строкам
-    blocks = re.split(r"\n---\n|\n{3,}", text)
+    """Агрессивно убирает все повторы из вывода LLM."""
+    # 1. Убираем inline-повторы (одна фраза повторяется внутри строки)
+    # "С Новым годом. С Новым годом. С Новым годом." → "С Новым годом."
+    text = re.sub(r"(.{15,}?)\1{2,}", r"\1", text)
+
+    # 2. Разбиваем на блоки по --- и убираем дубликаты
+    blocks = re.split(r"\n\s*---\s*\n|\n{3,}", text)
     seen = set()
     result = []
     for block in blocks:
@@ -25,22 +29,17 @@ def _truncate_repetitions(text: str) -> str:
         result.append(block)
     text = "\n\n".join(result)
 
-    # Также убираем повторяющиеся строки подряд
+    # 3. Убираем повторяющиеся строки подряд
     lines = text.split("\n")
     out = []
     prev = None
-    dup_count = 0
     for line in lines:
         s = line.strip()
         if s == prev and s:
-            dup_count += 1
-            if dup_count >= 2:
-                continue
-        else:
-            dup_count = 0
+            continue
         prev = s
         out.append(line)
-    return "\n".join(out)
+    return "\n".join(out).strip()
 
 
 def _clean_transcript(text: str) -> str:
