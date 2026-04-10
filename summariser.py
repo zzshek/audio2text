@@ -9,6 +9,25 @@ from pathlib import Path
 from logger import logger
 
 
+def _truncate_repetitions(text: str, max_repeats: int = 3) -> str:
+    """Обрезает текст если модель начала зацикливаться."""
+    lines = text.split("\n")
+    result = []
+    repeat_count = 0
+    prev_line = None
+    for line in lines:
+        stripped = line.strip()
+        if stripped == prev_line and stripped:
+            repeat_count += 1
+            if repeat_count >= max_repeats:
+                continue
+        else:
+            repeat_count = 0
+        prev_line = stripped
+        result.append(line)
+    return "\n".join(result)
+
+
 def _clean_transcript(text: str) -> str:
     """Убирает таймкоды и метки спикеров из транскрипции."""
     # [00:01-00:06] SPEAKER_02: текст  →  текст
@@ -206,8 +225,10 @@ class LLMSummarizer:
             self._mlx_tokenizer,
             prompt=prompt,
             max_tokens=4096,
-            repetition_context_size=256,
         )
+
+        # Обрезаем зацикленный вывод (если модель повторяется)
+        result = _truncate_repetitions(result)
 
         logger.info(f"LLM завершил за {time.time() - start:.1f} сек")
         return result
