@@ -32,8 +32,8 @@ def _make_session_dir(base_dir: str) -> Path:
 
 
 def _make_filename() -> str:
-    """Имя файла вида 2026-04-06 14:00"""
-    return datetime.now().strftime("%Y-%m-%d %H:%M")
+    """Имя файла вида 2026-04-06 14-00"""
+    return datetime.now().strftime("%Y-%m-%d %H-%M")
 
 
 def _has_ffmpeg() -> bool:
@@ -118,7 +118,10 @@ class Recorder:
         session_dir = _make_session_dir(self.output_dir)
         base_name = _make_filename()
         if custom_name.strip():
-            base_name = f"{base_name} {custom_name.strip()}"
+            # Убираем символы, недопустимые в имени файла (/ \ : * ? " < > |)
+            safe_name = custom_name.strip().replace("/", "-").replace("\\", "-")
+            safe_name = safe_name.translate(str.maketrans(':"*?<>|', "_" * 7))
+            base_name = f"{base_name} {safe_name}"
 
         self._recording = True
         dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]
