@@ -114,12 +114,23 @@ class Audio2TextApp:
             except Exception:
                 log_frame.pack(fill="both", expand=True,
                                padx=0, pady=(6, 0))
-        log = tk.Text(log_frame, height=6, state="disabled",
+        # Кнопка копирования в правом верхнем углу
+        top_bar = ttk.Frame(log_frame)
+        top_bar.pack(fill="x", side="top")
+        copy_btn = ttk.Button(top_bar, text="⧉", width=2,
+                              command=lambda: self._copy_log(log))
+        copy_btn.pack(side="right", padx=2, pady=1)
+
+        log = tk.Text(log_frame, height=6, state="normal",
                       wrap="word", font=("Menlo", 10))
         sb = ttk.Scrollbar(log_frame, command=log.yview)
         log.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         log.pack(fill="both", expand=True)
+        # Доступен для выделения и копирования, но не для ввода
+        log.bind("<Key>", lambda e: "break"
+                 if e.keysym not in ("c", "a") or not (e.state & 0x4)
+                 else None)
         return log
 
     # ── Record tab ─────────────────────────────────────────────────────
@@ -1337,10 +1348,16 @@ class Audio2TextApp:
     def _log(self, text: str):
         """Пишет в все лог-виджеты на вкладках."""
         for w in self._tab_logs:
-            w.configure(state="normal")
             w.insert("end", text + "\n")
             w.see("end")
-            w.configure(state="disabled")
+
+    def _copy_log(self, log_widget: tk.Text):
+        """Копирует содержимое лога в буфер обмена."""
+        text = log_widget.get("1.0", "end").strip()
+        if text:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+            self._log("Лог скопирован в буфер обмена")
 
     def _run_in_thread(self, target, *args):
         if self._running_task and self._running_task.is_alive():
