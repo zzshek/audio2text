@@ -55,7 +55,30 @@ def _clean_transcript(text: str) -> str:
     text = re.sub(r"Unknown:", "Спикер ?:", text)
     # Убираем пустые строки подряд
     text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+    # Дедупликация: если одна и та же реплика повторяется разными спикерами
+    # подряд (например "пока пока" от 7 спикеров циклически), сворачиваем.
+    # Оставляем по одной реплике на спикера в каждой группе одинаковых фраз.
+    lines = text.strip().split("\n")
+    deduped: list[str] = []
+    prev_utterance: str | None = None
+    seen_speakers: set[str] = set()
+    for line in lines:
+        m = re.match(r"(Спикер\s*\??\d*)\s*:\s*(.+)", line)
+        if m:
+            speaker = m.group(1).strip()
+            utterance = m.group(2).strip().lower()
+            if utterance == prev_utterance:
+                if speaker in seen_speakers:
+                    continue  # тот же спикер, та же фраза — пропускаем
+                seen_speakers.add(speaker)
+            else:
+                prev_utterance = utterance
+                seen_speakers = {speaker}
+        else:
+            prev_utterance = None
+            seen_speakers = set()
+        deduped.append(line)
+    return "\n".join(deduped).strip()
 
 
 def _detect_torch_device(preferred: str = "auto") -> str:

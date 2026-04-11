@@ -8,6 +8,31 @@ from pathlib import Path
 from logger import logger
 
 
+class _DiarProgressHook:
+    """Логирует прогресс каждого шага pyannote pipeline."""
+
+    def __init__(self):
+        self._step: str | None = None
+        self._last_pct: int = -1
+
+    def __call__(self, step_name, step_artifact, file=None, total=None, completed=None):
+        if total is None:
+            # Одноразовый шаг (кластеризация и т.д.)
+            logger.info(f"  ✓ {step_name}")
+            self._step = None
+            self._last_pct = -1
+            return
+        if step_name != self._step:
+            self._step = step_name
+            self._last_pct = -1
+            logger.info(f"  {step_name} (0/{total})...")
+        pct = int(100 * completed / total) if total else 100
+        # Логируем каждые 10%
+        if pct // 10 > self._last_pct // 10:
+            self._last_pct = pct
+            logger.info(f"  {step_name}: {completed}/{total} ({pct}%)")
+
+
 class Diarizer:
     """Speaker diarization через pyannote.audio.
 
@@ -89,7 +114,8 @@ class Diarizer:
         waveform, sample_rate = torchaudio.load(audio_path)
         audio_input = {"waveform": waveform, "sample_rate": sample_rate}
 
-        result = self._pipeline(audio_input, **params)
+        hook = _DiarProgressHook()
+        result = self._pipeline(audio_input, hook=hook, **params)
 
         # pyannote 4.x returns DiarizeOutput dataclass instead of bare
         # Annotation — the annotation lives at .speaker_diarization
