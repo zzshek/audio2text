@@ -236,10 +236,94 @@ class LLMSummarizer:
         prefix = prompts.get(self.task, prompts["summarize"])
         return prefix + text
 
-    def summarize(self, text: str) -> str:
-        """Обрабатывает текст через LLM."""
-        prompt = self._get_prompt(text)
+    def _count_tokens(self, text: str) -> int:
+        """Считает количество токенов через токенизатор модели."""
+        if self.provider == "local":
+            from mlx_lm import load
+            if self._mlx_model is None:
+                logger.info(f"Загрузка модели {self.local_model}...")
+                self._mlx_model, self._mlx_tokenizer = load(self.local_model)
+            return len(self._mlx_tokenizer.encode(text))
+        # Грубая оценка для API: ~1 токен на 3 символа для русского
+        return len(text) // 3
 
+    def _split_into_chunks(self, text: str, max_tokens: int) -> list[str]:
+        """Разбивает текст на чанки по строкам с перекрытием."""
+        lines = text.split("\n")
+        chunks: list[str] = []
+        current: list[str] = []
+        current_len = 0
+        overlap_lines = 10  # строк перекрытия между чанками
+
+        for line in lines:
+            line_tokens = self._count_tokens(line)
+            if current_len + line_tokens > max_tokens and current:
+                chunks.append("\n".join(current))
+                # Оставляем последние N строк как перекрытие
+                current = current[-overlap_lines:]
+                current_len = self._count_tokens("\n".join(current))
+            current.append(line)
+            current_len += line_tokens
+
+        if current:
+            chunks.append("\n".join(current))
+        return chunks
+
+    def _merge_prompt(self, summaries: list[str]) -> str:
+        """Промпт для объединения частичных саммари."""
+        context_line = f"Контекст: {self.context}\n" if self.context else ""
+        parts = "\n\n---\n\n".join(
+            f"### Часть {i+1}\n{s}" for i, s in enumerate(summaries)
+        )
+        return (
+            f"{context_line}"
+            "Ниже несколько резюме частей одной встречи. "
+            "Объедини их в одно структурированное резюме на русском языке "
+            "в формате Markdown. Убери дублирующуюся информацию. "
+            "Используй структуру:\n\n"
+            "## Резюме\nКраткое описание встречи (2-4 предложения).\n\n"
+            "## Ключевые моменты\n- пункт\n\n"
+            "## Решения\n- решение\n\n"
+            "## Задачи\n- [ ] задача (ответственный)\n\n"
+            "## Открытые вопросы\n- вопрос\n\n"
+            f"Частичные резюме:\n\n{parts}"
+        )
+
+    def summarize(self, text: str) -> str:
+        """Обрабатывает текст через LLM. Для длинных текстов — chunked."""
+        clean_text = _clean_transcript(text)
+
+        # Лимит контекста: оставляем место для промпта (~500 токенов) и выхода (4096)
+        max_context = 24000  # консервативно для 32K модели
+        prompt_overhead = 500
+        max_input_tokens = max_context - prompt_overhead - 4096
+
+        input_tokens = self._count_tokens(clean_text)
+        logger.info(f"Входной текст: {input_tokens} токенов")
+
+        if input_tokens <= max_input_tokens:
+            # Всё влезает — обычная обработка
+            prompt = self._get_prompt(text)
+            return self._call_llm(prompt)
+
+        # Chunked: разбиваем на части
+        chunks = self._split_into_chunks(clean_text, max_input_tokens)
+        logger.info(f"Текст разбит на {len(chunks)} частей (chunked summarization)")
+
+        partial_summaries: list[str] = []
+        for i, chunk in enumerate(chunks):
+            logger.info(f"  Суммаризация части {i+1}/{len(chunks)}...")
+            prompt = self._get_prompt(chunk)
+            summary = self._call_llm(prompt)
+            partial_summaries.append(summary)
+
+        # Финальное объединение
+        logger.info("Объединение частичных резюме...")
+        merge_prompt = self._merge_prompt(partial_summaries)
+        return self._call_llm(merge_prompt)
+
+    def _call_llm(self, prompt: str) -> str:
+        """Вызывает LLM провайдера."""
         if self.provider == "local":
             return self._run_local(prompt)
         elif self.provider == "openai":
