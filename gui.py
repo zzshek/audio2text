@@ -96,6 +96,7 @@ class Audio2TextApp:
         self._build_diarize_tab(notebook)
         self._build_summarize_tab(notebook)
         self._build_process_tab(notebook)
+        self._build_monitor_tab(notebook)
         self._build_settings_tab(notebook)
 
         # Глобальный лог (для старых сообщений)
@@ -1086,6 +1087,140 @@ class Audio2TextApp:
             else "Нет новых записей.")
 
     # ── Settings tab ───────────────────────────────────────────────────
+
+    # ── Monitor tab ─────────────────────────────────────────────────────
+
+    def _build_monitor_tab(self, notebook: ttk.Notebook):
+        frame = ttk.Frame(notebook, padding=12)
+        notebook.add(frame, text=" Монитор ")
+
+        frame.columnconfigure(1, weight=1)
+
+        # Заголовок
+        ttk.Label(frame, text="Ресурсы процесса audio2text",
+                  font=("", 13, "bold")).grid(
+            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+
+        # CPU
+        ttk.Label(frame, text="CPU:").grid(row=1, column=0, sticky="w", pady=3)
+        self._mon_cpu_var = tk.StringVar(value="—")
+        ttk.Label(frame, textvariable=self._mon_cpu_var).grid(
+            row=1, column=1, sticky="w", padx=6)
+        self._mon_cpu_bar = ttk.Progressbar(frame, length=300, maximum=100)
+        self._mon_cpu_bar.grid(row=1, column=2, sticky="ew", padx=(0, 6))
+
+        # Memory RSS
+        ttk.Label(frame, text="RAM:").grid(row=2, column=0, sticky="w", pady=3)
+        self._mon_mem_var = tk.StringVar(value="—")
+        ttk.Label(frame, textvariable=self._mon_mem_var).grid(
+            row=2, column=1, sticky="w", padx=6)
+        self._mon_mem_bar = ttk.Progressbar(frame, length=300, maximum=100)
+        self._mon_mem_bar.grid(row=2, column=2, sticky="ew", padx=(0, 6))
+
+        # Threads
+        ttk.Label(frame, text="Потоки:").grid(row=3, column=0, sticky="w", pady=3)
+        self._mon_threads_var = tk.StringVar(value="—")
+        ttk.Label(frame, textvariable=self._mon_threads_var).grid(
+            row=3, column=1, sticky="w", padx=6)
+
+        # Uptime
+        ttk.Label(frame, text="Время работы:").grid(row=4, column=0, sticky="w", pady=3)
+        self._mon_uptime_var = tk.StringVar(value="—")
+        ttk.Label(frame, textvariable=self._mon_uptime_var).grid(
+            row=4, column=1, sticky="w", padx=6)
+
+        # System total
+        ttk.Separator(frame).grid(
+            row=5, column=0, columnspan=3, sticky="ew", pady=8)
+        ttk.Label(frame, text="Система", font=("", 12, "bold")).grid(
+            row=6, column=0, columnspan=3, sticky="w", pady=(0, 6))
+
+        ttk.Label(frame, text="CPU (система):").grid(row=7, column=0, sticky="w", pady=3)
+        self._mon_sys_cpu_var = tk.StringVar(value="—")
+        ttk.Label(frame, textvariable=self._mon_sys_cpu_var).grid(
+            row=7, column=1, sticky="w", padx=6)
+        self._mon_sys_cpu_bar = ttk.Progressbar(frame, length=300, maximum=100)
+        self._mon_sys_cpu_bar.grid(row=7, column=2, sticky="ew", padx=(0, 6))
+
+        ttk.Label(frame, text="RAM (система):").grid(row=8, column=0, sticky="w", pady=3)
+        self._mon_sys_mem_var = tk.StringVar(value="—")
+        ttk.Label(frame, textvariable=self._mon_sys_mem_var).grid(
+            row=8, column=1, sticky="w", padx=6)
+        self._mon_sys_mem_bar = ttk.Progressbar(frame, length=300, maximum=100)
+        self._mon_sys_mem_bar.grid(row=8, column=2, sticky="ew", padx=(0, 6))
+
+        # История (текстовый лог)
+        frame.rowconfigure(10, weight=1)
+        frame.columnconfigure(2, weight=1)
+        self._mon_log = self._make_log_widget(frame, row=10, col_span=3)
+        self._tab_logs.append(self._mon_log)
+
+        # Запуск обновления
+        self._mon_process = None
+        self._monitor_update()
+
+    def _monitor_update(self):
+        """Обновляет метрики монитора каждые 2 секунды."""
+        try:
+            import psutil
+            import os
+            import time as _time
+
+            if self._mon_process is None:
+                self._mon_process = psutil.Process(os.getpid())
+                # Первый вызов cpu_percent для инициализации
+                self._mon_process.cpu_percent()
+
+            proc = self._mon_process
+
+            # Process CPU (% от всех ядер)
+            cpu_pct = proc.cpu_percent()
+            self._mon_cpu_var.set(f"{cpu_pct:.1f}%")
+            self._mon_cpu_bar["value"] = min(cpu_pct, 100)
+
+            # Process Memory
+            mem_info = proc.memory_info()
+            rss_mb = mem_info.rss / 1024 / 1024
+            rss_gb = rss_mb / 1024
+            total_mem = psutil.virtual_memory().total / 1024 / 1024
+            mem_pct = (mem_info.rss / psutil.virtual_memory().total) * 100
+            if rss_gb >= 1:
+                self._mon_mem_var.set(f"{rss_gb:.1f} GB ({mem_pct:.1f}%)")
+            else:
+                self._mon_mem_var.set(f"{rss_mb:.0f} MB ({mem_pct:.1f}%)")
+            self._mon_mem_bar["value"] = min(mem_pct, 100)
+
+            # Threads
+            self._mon_threads_var.set(str(proc.num_threads()))
+
+            # Uptime
+            create_time = proc.create_time()
+            uptime_sec = _time.time() - create_time
+            h = int(uptime_sec // 3600)
+            m = int((uptime_sec % 3600) // 60)
+            s = int(uptime_sec % 60)
+            self._mon_uptime_var.set(f"{h:02d}:{m:02d}:{s:02d}")
+
+            # System CPU
+            sys_cpu = psutil.cpu_percent()
+            self._mon_sys_cpu_var.set(f"{sys_cpu:.1f}%")
+            self._mon_sys_cpu_bar["value"] = min(sys_cpu, 100)
+
+            # System Memory
+            vmem = psutil.virtual_memory()
+            sys_mem_used_gb = vmem.used / 1024 / 1024 / 1024
+            sys_mem_total_gb = vmem.total / 1024 / 1024 / 1024
+            self._mon_sys_mem_var.set(
+                f"{sys_mem_used_gb:.1f} / {sys_mem_total_gb:.1f} GB ({vmem.percent}%)")
+            self._mon_sys_mem_bar["value"] = vmem.percent
+
+        except ImportError:
+            self._mon_cpu_var.set("psutil не установлен")
+            self._mon_mem_var.set("pip install psutil")
+        except Exception as e:
+            self._mon_cpu_var.set(f"Ошибка: {e}")
+
+        self.root.after(2000, self._monitor_update)
 
     def _build_settings_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
