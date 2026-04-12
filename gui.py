@@ -35,8 +35,8 @@ class Audio2TextApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("audio2text")
-        self.root.geometry("750x600")
-        self.root.minsize(700, 520)
+        self.root.geometry("800x620")
+        self.root.minsize(780, 520)
 
         # macOS native feel
         self.root.option_add("*tearOff", False)
@@ -87,6 +87,10 @@ class Audio2TextApp:
     # ── UI ─────────────────────────────────────────────────────────────
 
     def _build_ui(self):
+        # Добавляем padding вокруг текста вкладок
+        style = ttk.Style()
+        style.configure("TNotebook.Tab", padding=[10, 4])
+
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill="both", expand=True, padx=8, pady=(6, 0))
 
@@ -148,7 +152,7 @@ class Audio2TextApp:
 
     def _build_record_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text=" Запись ")
+        notebook.add(frame, text="Запись")
 
         # ── Правая часть: устройства ──
         dev_frame = ttk.Frame(frame)
@@ -481,7 +485,7 @@ class Audio2TextApp:
 
     def _build_live_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text=" Live ")
+        notebook.add(frame, text="Live")
 
         # ── Правая часть: устройства ──
         dev_frame = ttk.Frame(frame)
@@ -720,7 +724,7 @@ class Audio2TextApp:
 
     def _build_transcribe_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text=" Транскрибация ")
+        notebook.add(frame, text="Транскр.")
 
         ttk.Label(frame, text="Файл / папка:").grid(
             row=0, column=0, sticky="w", pady=5)
@@ -795,7 +799,7 @@ class Audio2TextApp:
 
     def _build_diarize_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text=" Диаризация ")
+        notebook.add(frame, text="Диариз.")
 
         ttk.Label(frame, text="Файл / папка:").grid(
             row=0, column=0, sticky="w", pady=5)
@@ -864,13 +868,13 @@ class Audio2TextApp:
 
     def _build_summarize_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text=" Суммаризация ")
+        notebook.add(frame, text="Саммари")
 
-        # Файл или вставить текст
+        # Файл
         top = ttk.Frame(frame)
         top.grid(row=0, column=0, sticky="ew")
 
-        ttk.Label(top, text="Текстовый файл:").pack(side="left")
+        ttk.Label(top, text="Файл:").pack(side="left")
         self.sum_path_var = tk.StringVar()
         ttk.Entry(top, textvariable=self.sum_path_var).pack(
             side="left", fill="x", expand=True, padx=(8, 0))
@@ -878,65 +882,67 @@ class Audio2TextApp:
                    command=self._pick_text_file).pack(
             side="left", padx=(4, 0))
 
-        # Задача
-        opts = ttk.Frame(frame)
-        opts.grid(row=1, column=0, sticky="w", pady=(8, 0))
+        # Превью файла
+        ttk.Label(frame, text="Превью файла:").grid(
+            row=1, column=0, sticky="w", pady=(8, 2))
 
-        ttk.Label(opts, text="Задача:").pack(side="left")
-        self.sum_task_var = tk.StringVar(value="summarize")
-        ttk.Combobox(opts, textvariable=self.sum_task_var,
-                     state="readonly", width=18,
-                     values=["summarize", "format",
-                             "extract_actions"]).pack(
-            side="left", padx=(8, 0))
-
-        ttk.Label(opts, text="  Контекст:").pack(side="left", padx=(12, 0))
-        self.sum_context_var = tk.StringVar(
-            value=self.config.get("summarization", {}).get(
-                "context",
-                "IT-компания, аналитика данных. "
-                "Используй IT-терминологию."))
-        ttk.Entry(opts, textvariable=self.sum_context_var,
-                  width=40).pack(side="left", padx=(4, 0))
-
-        # Входной текст
-        ttk.Label(frame, text="Текст для суммаризации:").grid(
-            row=2, column=0, sticky="w", pady=(10, 2))
-
-        input_frame = ttk.Frame(frame)
-        input_frame.grid(row=3, column=0, sticky="nsew")
+        preview_frame = ttk.Frame(frame)
+        preview_frame.grid(row=2, column=0, sticky="nsew")
 
         self.sum_input = tk.Text(
-            input_frame, height=10, wrap="word",
-            font=("Menlo", 11))
-        sb_in = ttk.Scrollbar(input_frame, command=self.sum_input.yview)
+            preview_frame, height=6, wrap="word",
+            font=("Menlo", 10))
+        sb_in = ttk.Scrollbar(preview_frame, command=self.sum_input.yview)
         self.sum_input.configure(yscrollcommand=sb_in.set)
         sb_in.pack(side="right", fill="y")
         self.sum_input.pack(fill="both", expand=True)
 
+        # Промпт (редактируемый)
+        ttk.Label(frame, text="Промпт (можно редактировать):").grid(
+            row=3, column=0, sticky="w", pady=(8, 2))
+
+        prompt_frame = ttk.Frame(frame)
+        prompt_frame.grid(row=4, column=0, sticky="nsew")
+
+        self.sum_prompt = tk.Text(
+            prompt_frame, height=8, wrap="word",
+            font=("Menlo", 10))
+        sb_prompt = ttk.Scrollbar(prompt_frame, command=self.sum_prompt.yview)
+        self.sum_prompt.configure(yscrollcommand=sb_prompt.set)
+        sb_prompt.pack(side="right", fill="y")
+        self.sum_prompt.pack(fill="both", expand=True)
+
+        # Заполняем дефолтным промптом
+        default_prompt = (
+            "Ниже транскрипция рабочей встречи. "
+            "Напиши подробное структурированное резюме на русском языке "
+            "в формате Markdown. Важно: раскрывай каждый пункт детально — "
+            "что именно обсуждалось, какие аргументы приводились, "
+            "о чём договорились. Указывай спикеров где возможно.\n\n"
+            "Используй именно такую структуру:\n\n"
+            "## Резюме\nОписание встречи: участники, основная тема, контекст (3-5 предложений).\n\n"
+            "## Обсуждаемые темы\nДля каждой темы опиши:\n"
+            "### Тема N: название\n"
+            "- Суть вопроса\n"
+            "- Позиции участников и ключевые аргументы\n"
+            "- К чему пришли / что решили\n\n"
+            "## Решения и договорённости\n"
+            "- Конкретное решение — кто, что, когда\n\n"
+            "## Задачи\n- [ ] задача (ответственный, срок если озвучен)\n\n"
+            "## Открытые вопросы\n- вопрос, который остался без решения\n\n"
+            "Транскрипция:\n"
+        )
+        self.sum_prompt.insert("1.0", default_prompt)
+
         # Кнопка
         ttk.Button(frame, text="Суммаризировать",
                    command=self._run_summarize).grid(
-            row=4, column=0, pady=10)
+            row=5, column=0, pady=8)
 
-        # Результат
-        ttk.Label(frame, text="Результат:").grid(
-            row=5, column=0, sticky="w", pady=(4, 2))
-
-        out_frame = ttk.Frame(frame)
-        out_frame.grid(row=6, column=0, sticky="nsew")
-
-        self.sum_output = tk.Text(
-            out_frame, height=10, wrap="word", state="disabled",
-            font=("Menlo", 11))
-        sb_out = ttk.Scrollbar(out_frame, command=self.sum_output.yview)
-        self.sum_output.configure(yscrollcommand=sb_out.set)
-        sb_out.pack(side="right", fill="y")
-        self.sum_output.pack(fill="both", expand=True)
-
+        # Лог
         frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(3, weight=1)
-        frame.rowconfigure(6, weight=1)
+        frame.rowconfigure(2, weight=1)
+        frame.rowconfigure(4, weight=1)
 
     def _pick_text_file(self):
         path = filedialog.askopenfilename(
@@ -963,36 +969,39 @@ class Audio2TextApp:
         text = self.sum_input.get("1.0", "end").strip()
         if not text:
             messagebox.showwarning("audio2text",
-                                   "Введите или загрузите текст.")
+                                   "Загрузите текстовый файл.")
             return
 
-        # Обновить контекст и задачу в конфиге
-        self.config.setdefault("summarization", {})["context"] = \
-            self.sum_context_var.get()
-        self.config.setdefault("llm", {})["task"] = \
-            self.sum_task_var.get()
+        prompt_template = self.sum_prompt.get("1.0", "end").strip()
+        if not prompt_template:
+            messagebox.showwarning("audio2text",
+                                   "Промпт не может быть пустым.")
+            return
 
-        self._run_in_thread(self._do_summarize, text)
+        self._run_in_thread(self._do_summarize, text, prompt_template)
 
-    def _do_summarize(self, text: str):
+    def _do_summarize(self, text: str, prompt_template: str):
         cfg = self.config
         llm_cfg = cfg.get("llm", {})
         sum_cfg = cfg.get("summarization", {})
 
         try:
             if llm_cfg.get("enabled"):
-                from summariser import LLMSummarizer
+                from summariser import LLMSummarizer, _clean_transcript
                 s = LLMSummarizer(cfg)
+                # Используем промпт из GUI вместо встроенного
+                clean_text = _clean_transcript(text)
+                full_prompt = prompt_template + "\n" + clean_text
+                result = s._call_llm(full_prompt)
             elif sum_cfg.get("enabled"):
                 from summariser import Summarizer
                 s = Summarizer(cfg)
+                result = s.summarize(text)
             else:
                 self.log_queue.put(
                     "Суммаризация отключена. Включите LLM или "
                     "Summarization в Настройках / config.yaml")
                 return
-
-            result = s.summarize(text)
 
             # Сохранить в файл рядом с исходным
             saved = ""
@@ -1003,13 +1012,6 @@ class Audio2TextApp:
                 out.write_text(result, encoding="utf-8")
                 saved = f" → {out}"
 
-            def show_result():
-                self.sum_output.configure(state="normal")
-                self.sum_output.delete("1.0", "end")
-                self.sum_output.insert("1.0", result)
-                self.sum_output.configure(state="disabled")
-
-            self.root.after(0, show_result)
             self.log_queue.put(
                 f"Суммаризация завершена "
                 f"({len(result)} символов){saved}")
@@ -1020,7 +1022,7 @@ class Audio2TextApp:
 
     def _build_process_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text=" Pipeline ")
+        notebook.add(frame, text="Pipeline")
 
         ttk.Label(frame, text="Файл / папка:").grid(
             row=0, column=0, sticky="w", pady=5)
@@ -1092,7 +1094,7 @@ class Audio2TextApp:
 
     def _build_monitor_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=12)
-        notebook.add(frame, text=" Монитор ")
+        notebook.add(frame, text="Монитор")
 
         frame.columnconfigure(1, weight=1)
 
@@ -1224,7 +1226,7 @@ class Audio2TextApp:
 
     def _build_settings_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text=" Настройки ")
+        notebook.add(frame, text="Настройки")
 
         canvas = tk.Canvas(frame, highlightthickness=0, bg=self.root.cget("bg"))
         scrollbar = ttk.Scrollbar(

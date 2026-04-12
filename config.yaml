@@ -76,6 +76,6 @@ llm:
 
 # Экспорт в Obsidian
 obsidian:
-  enabled: false
-  vault_path: ""         # путь к Obsidian vault, например /Users/me/Obsidian
+  enabled: true
+  vault_path: "/Users/dm.mikhaylov/obsidian_history/shek"
   folder: "Meetings"     # папка внутри vault для заметок встреч
