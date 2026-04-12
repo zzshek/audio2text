@@ -66,10 +66,31 @@ def diarize_file(audio_path: str, config: dict, transcription: dict | None = Non
     diar = Diarizer(config)
     turns = diar.diarize(str(audio))
 
+    hf_token = config.get("diarization", {}).get("hf_token", "")
+
     if transcription and transcription.get("segments"):
         merged = Diarizer.merge_transcription_and_diarization(
             transcription["segments"], turns
         )
+
+        # Идентификация спикеров по базе голосов
+        if hf_token:
+            try:
+                from speaker_db import (
+                    identify_speakers, apply_speaker_names,
+                    register_speakers_from_diarization,
+                )
+                # Сначала пробуем распознать по базе
+                mapping = identify_speakers(str(audio), turns, hf_token)
+                if mapping:
+                    merged = apply_speaker_names(merged, mapping)
+                    logger.info(f"Распознано спикеров: {len(mapping)}")
+
+                # Регистрируем новые голоса в базе
+                register_speakers_from_diarization(str(audio), turns, hf_token)
+            except Exception as e:
+                logger.warning(f"Идентификация спикеров: {e}")
+
         text = Diarizer.format_diarized_text(merged)
         _save_text(audio.parent / f"{audio.stem}_diar.txt", text)
         if unload:

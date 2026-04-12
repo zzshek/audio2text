@@ -175,6 +175,71 @@ def info(ctx):
     click.echo(show_info(ctx.obj["config"]))
 
 
+# ── speakers ──────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("audio_path", type=click.Path(exists=True))
+@click.pass_context
+def speakers_register(ctx, audio_path):
+    """Извлечь голоса спикеров из аудиофайла и добавить в базу.
+
+    После запуска откройте speakers_db/speakers.yaml
+    и заполните поле 'name' для каждого спикера.
+    """
+    from processor import diarize_file, transcribe_file
+    from speaker_db import register_speakers_from_diarization
+
+    config = ctx.obj["config"]
+    hf_token = config.get("diarization", {}).get("hf_token", "")
+    if not hf_token:
+        click.echo("Ошибка: укажите hf_token в config.yaml")
+        return
+
+    p = Path(audio_path)
+
+    # Диаризация если нет _diar.txt
+    diar_file = p.parent / f"{p.stem}_diar.txt"
+    if not diar_file.exists():
+        click.echo("Диаризация...")
+        result = transcribe_file(str(p), config)
+        diarize_file(str(p), config, transcription=result)
+
+    # Получаем сегменты из diarizer заново для embeddings
+    from diarizer import Diarizer
+    diar = Diarizer(config)
+    turns = diar.diarize(str(p))
+
+    click.echo(f"Найдено спикеров: {len(set(t['speaker'] for t in turns))}")
+    new_ids = register_speakers_from_diarization(str(p), turns, hf_token)
+
+    if new_ids:
+        click.echo(f"\nДобавлено {len(new_ids)} голосов в speakers_db/speakers.yaml")
+        click.echo("Откройте файл и заполните поле 'name' для каждого спикера.")
+    else:
+        click.echo("Все спикеры уже в базе.")
+
+
+@cli.command()
+def speakers_list():
+    """Показать зарегистрированных спикеров."""
+    from speaker_db import _load_speakers
+
+    data = _load_speakers()
+    speakers = data.get("speakers", {})
+
+    if not speakers:
+        click.echo("База спикеров пуста. Используйте: audio2text speakers-register <audio>")
+        return
+
+    click.echo(f"Спикеров в базе: {len(speakers)}\n")
+    for key, info in speakers.items():
+        name = info.get("name", "") or "(не указано)"
+        source = info.get("source", "")
+        sp_id = info.get("speaker_id", "")
+        click.echo(f"  {name:30s}  {sp_id:12s}  из {source}")
+
+
 # ── gui ────────────────────────────────────────────────────────────────────
 
 

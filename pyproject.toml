@@ -26,6 +26,7 @@ cuda = [
 diarization = [
     "pyannote.audio>=3.3",
     "torch>=2.0",
+    "scipy>=1.10",
 ]
 # Суммаризация (seq2seq модели)
 summarization = [
