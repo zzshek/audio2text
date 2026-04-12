@@ -234,13 +234,14 @@ def export_obsidian_note(
         return None
 
     meta = _parse_meeting_meta(audio_path)
-    target_dir = vault / folder
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    # Имя файла: 2026-04-08 Gen AI.md
     safe_title = meta["title"].replace("/", "-").replace("\\", "-")
+
+    # Отдельная папка для каждой встречи: Meetings/2026-04-10 Название/
+    meeting_dir = vault / folder / f"{meta['date']} {safe_title}"
+    meeting_dir.mkdir(parents=True, exist_ok=True)
+
     md_name = f"{meta['date']} {safe_title}.md"
-    md_path = target_dir / md_name
+    md_path = meeting_dir / md_name
 
     # Frontmatter
     lines = [
