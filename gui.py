@@ -940,9 +940,13 @@ class Audio2TextApp:
             row=5, column=0, pady=8)
 
         # Лог
+        log = self._make_log_widget(frame, row=6)
+        self._tab_logs.append(log)
+
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(2, weight=1)
         frame.rowconfigure(4, weight=1)
+        frame.rowconfigure(6, weight=1)
 
     def _pick_text_file(self):
         path = filedialog.askopenfilename(
@@ -1015,6 +1019,35 @@ class Audio2TextApp:
             self.log_queue.put(
                 f"Суммаризация завершена "
                 f"({len(result)} символов){saved}")
+
+            # Экспорт в Obsidian
+            obs_cfg = cfg.get("obsidian", {})
+            if obs_cfg.get("enabled") and result and src:
+                try:
+                    from processor import export_obsidian_note
+                    # Ищем аудиофайл рядом с текстовым
+                    from processor import SUPPORTED_AUDIO
+                    p = Path(src)
+                    audio_path = None
+                    for ext in SUPPORTED_AUDIO:
+                        # Убираем суффиксы _diar, _timed из имени
+                        stem = p.stem
+                        for suffix in ("_diar", "_timed", "_summary"):
+                            stem = stem.removesuffix(suffix)
+                        candidate = p.parent / f"{stem}{ext}"
+                        if candidate.exists():
+                            audio_path = candidate
+                            break
+                    if audio_path:
+                        md = export_obsidian_note(audio_path, result, cfg)
+                        if md:
+                            self.log_queue.put(f"Obsidian: {md}")
+                    else:
+                        self.log_queue.put(
+                            "Obsidian: аудиофайл не найден рядом с текстом")
+                except Exception as e:
+                    self.log_queue.put(f"Ошибка Obsidian: {e}")
+
         except Exception as e:
             self.log_queue.put(f"Ошибка суммаризации: {e}")
 
