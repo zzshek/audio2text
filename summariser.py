@@ -357,10 +357,22 @@ class LLMSummarizer:
             logger.info(f"Загрузка модели {self.local_model}...")
             self._mlx_model, self._mlx_tokenizer = load(self.local_model)
 
+        # Применяем chat template для Instruct-моделей
+        messages = [
+            {"role": "system", "content": "Ты — ассистент для анализа рабочих встреч. Отвечай структурированно на русском языке."},
+            {"role": "user", "content": prompt},
+        ]
+        if hasattr(self._mlx_tokenizer, "apply_chat_template"):
+            formatted_prompt = self._mlx_tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+        else:
+            formatted_prompt = prompt
+
         result = generate(
             self._mlx_model,
             self._mlx_tokenizer,
-            prompt=prompt,
+            prompt=formatted_prompt,
             max_tokens=4096,
         )
 

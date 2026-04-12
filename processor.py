@@ -140,7 +140,9 @@ def process_file(audio_path: str, config: dict) -> None:
     sum_cfg = config.get("summarization", {})
     llm_cfg = config.get("llm", {})
     if sum_cfg.get("enabled") or llm_cfg.get("enabled"):
-        txt_path = audio.with_suffix(".txt")
+        # Предпочитаем _diar.txt (со спикерами) если есть, иначе .txt
+        diar_path = audio.parent / f"{audio.stem}_diar.txt"
+        txt_path = diar_path if diar_path.exists() else audio.with_suffix(".txt")
         if txt_path.exists():
             logger.info("[3/4] Суммаризация...")
             t3 = time.time()
