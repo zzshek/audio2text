@@ -280,15 +280,13 @@ def find_unprocessed(config: dict) -> list[Path]:
         return []
 
     unprocessed = []
-    for day_dir in sorted(output_dir.iterdir()):
-        if not day_dir.is_dir():
+    # Ищем рекурсивно — аудио может быть в подпапках дня или встречи
+    for audio_file in sorted(output_dir.rglob("*")):
+        if not audio_file.is_file() or audio_file.suffix.lower() not in SUPPORTED_AUDIO:
             continue
-        for f in sorted(day_dir.iterdir()):
-            if not f.is_file() or f.suffix.lower() not in SUPPORTED_AUDIO:
-                continue
-            summary_file = f.parent / f"{f.stem}_summary.txt"
-            if not summary_file.exists():
-                unprocessed.append(f)
+        summary_file = audio_file.parent / f"{audio_file.stem}_summary.txt"
+        if not summary_file.exists():
+            unprocessed.append(audio_file)
     return unprocessed
 
 
@@ -429,6 +427,10 @@ def record_live(
     base_name = _make_filename()
     if custom_name.strip():
         base_name = f"{base_name} {custom_name.strip()}"
+
+    # Подпапка для каждой записи
+    session_dir = session_dir / base_name
+    session_dir.mkdir(parents=True, exist_ok=True)
     output_txt = session_dir / f"{base_name}_live.txt"
 
     dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]

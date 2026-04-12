@@ -123,6 +123,10 @@ class Recorder:
             safe_name = safe_name.translate(str.maketrans(':"*?<>|', "_" * 7))
             base_name = f"{base_name} {safe_name}"
 
+        # Подпапка для каждой записи: recordings/2026-04-10_Friday/2026-04-10 16-04 Название/
+        session_dir = session_dir / base_name
+        session_dir.mkdir(parents=True, exist_ok=True)
+
         self._recording = True
         dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]
 
