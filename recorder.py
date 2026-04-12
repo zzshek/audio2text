@@ -90,6 +90,7 @@ class Recorder:
 
         self._frames: list[np.ndarray] = []
         self._recording = False
+        self._muted = False
         self._lock = threading.Lock()
 
     def list_devices(self) -> str:
@@ -134,6 +135,14 @@ class Recorder:
             def cb(indata, frames, time_info, status):
                 if status:
                     logger.warning(f"Audio status: {status}")
+                if self._muted:
+                    # Записываем тишину, сохраняя длительность
+                    silence = np.zeros_like(indata)
+                    with self._lock:
+                        dev_frames[idx].append(silence)
+                    if vu_callback:
+                        vu_callback(idx, 0.0)
+                    return
                 with self._lock:
                     dev_frames[idx].append(indata.copy())
                 rms = float(np.sqrt(np.mean(indata ** 2)))
@@ -197,6 +206,20 @@ class Recorder:
     def stop(self) -> None:
         """Останавливает запись из другого потока."""
         self._recording = False
+
+    def mute(self) -> None:
+        """Выключает микрофон (записывает тишину)."""
+        self._muted = True
+        logger.info("🔇 Микрофон выключен (mute)")
+
+    def unmute(self) -> None:
+        """Включает микрофон."""
+        self._muted = False
+        logger.info("🔊 Микрофон включён")
+
+    @property
+    def is_muted(self) -> bool:
+        return self._muted
 
     def _save(self, audio_data: np.ndarray, session_dir: Path, base_name: str) -> Path:
         """Сохраняет аудио в нужном формате."""

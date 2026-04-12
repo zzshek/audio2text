@@ -238,6 +238,11 @@ class Audio2TextApp:
             command=self._toggle_record)
         self.record_btn.pack(side="left")
 
+        self.mute_btn = ttk.Button(
+            btn_frame, text="🔇 Mute", width=16,
+            command=self._toggle_mute, state="disabled")
+        self.mute_btn.pack(pady=(0, 4), anchor="w")
+
         ttk.Button(btn_frame, text="Открыть папку", width=16,
                    command=self._open_recordings_folder).pack(
             pady=(0, 4), anchor="w")
@@ -400,6 +405,18 @@ class Audio2TextApp:
         else:
             self._stop_record()
 
+    def _toggle_mute(self):
+        if not self._recorder:
+            return
+        if self._recorder.is_muted:
+            self._recorder.unmute()
+            self.mute_btn.configure(text="🔇 Mute")
+            self.record_status.configure(text="Идёт запись...")
+        else:
+            self._recorder.mute()
+            self.mute_btn.configure(text="🔊 Unmute")
+            self.record_status.configure(text="Микрофон выключен")
+
     def _start_record(self):
         if self._running_task and self._running_task.is_alive():
             messagebox.showwarning("audio2text",
@@ -411,6 +428,7 @@ class Audio2TextApp:
         self._recording = True
         self.record_btn.configure(text="Остановить")
         self.record_status.configure(text="Идёт запись...")
+        self.mute_btn.configure(state="normal", text="🔇 Mute")
         self._do_blink(self._rec_dot_canvas, self._rec_dot, "_recording")
 
         devs, tags = self._collect_devices(
@@ -448,6 +466,7 @@ class Audio2TextApp:
         self._recording = False
         self.record_btn.configure(text="Начать запись")
         self.record_status.configure(text="")
+        self.mute_btn.configure(state="disabled", text="🔇 Mute")
         self.rec_mic_vu.set(0)
         self.rec_sys_vu.set(0)
 
@@ -588,6 +607,11 @@ class Audio2TextApp:
             command=self._toggle_live)
         self.live_btn.pack(side="left")
 
+        self.live_mute_btn = ttk.Button(
+            btn_frame, text="🔇 Mute", width=16,
+            command=self._toggle_live_mute, state="disabled")
+        self.live_mute_btn.pack(pady=(0, 4), anchor="w")
+
         ttk.Button(btn_frame, text="Открыть папку", width=16,
                    command=self._open_recordings_folder).pack(
             pady=(0, 4), anchor="w")
@@ -619,9 +643,22 @@ class Audio2TextApp:
 
         self._live_recording = False
         self._live_stop_event = None
+        self._live_mute_event = None
         self._live_text_queue: queue.Queue[str] = queue.Queue()
 
     # ── Live controls ─────────────────────────────────────────────────
+
+    def _toggle_live_mute(self):
+        if not self._live_mute_event:
+            return
+        if self._live_mute_event.is_set():
+            self._live_mute_event.clear()
+            self.live_mute_btn.configure(text="🔇 Mute")
+            self.live_status.configure(text="Запись + транскрибация...")
+        else:
+            self._live_mute_event.set()
+            self.live_mute_btn.configure(text="🔊 Unmute")
+            self.live_status.configure(text="Микрофон выключен")
 
     def _toggle_live(self):
         if not self._live_recording:
@@ -638,8 +675,10 @@ class Audio2TextApp:
         import threading as _threading
         self._live_recording = True
         self._live_stop_event = _threading.Event()
+        self._live_mute_event = _threading.Event()
         self.live_btn.configure(text="Остановить")
         self.live_status.configure(text="Загрузка модели...")
+        self.live_mute_btn.configure(state="normal", text="🔇 Mute")
         self._do_blink(self._live_dot_canvas, self._live_dot,
                        "_live_recording")
 
@@ -674,6 +713,7 @@ class Audio2TextApp:
                 path = record_live(
                     self.config, devices=devs,
                     stop_event=self._live_stop_event,
+                    mute_event=self._live_mute_event,
                     on_chunk=on_chunk, vu_callback=vu_cb,
                     custom_name=custom_name)
                 if path and path.exists():
@@ -704,6 +744,7 @@ class Audio2TextApp:
         self._live_recording = False
         self.live_btn.configure(text="Live Запись")
         self.live_status.configure(text="")
+        self.live_mute_btn.configure(state="disabled", text="🔇 Mute")
         self.live_mic_vu.set(0)
         self.live_sys_vu.set(0)
 

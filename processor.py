@@ -400,6 +400,7 @@ def record_live(
     config: dict,
     devices=None,
     stop_event=None,
+    mute_event=None,
     on_chunk=None,
     vu_callback=None,
     custom_name: str = "",
@@ -464,6 +465,13 @@ def record_live(
         def cb(indata, frame_count, time_info, status):
             if status:
                 logger.warning(f"Audio status: {status}")
+            if mute_event and mute_event.is_set():
+                silence = np.zeros_like(indata)
+                with lock:
+                    dev_frames[idx].append(silence)
+                if vu_callback:
+                    vu_callback(idx, 0.0)
+                return
             with lock:
                 dev_frames[idx].append(indata.copy())
             rms = float(np.sqrt(np.mean(indata ** 2)))
