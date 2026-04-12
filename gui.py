@@ -35,8 +35,8 @@ class Audio2TextApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("audio2text")
-        self.root.geometry("800x620")
-        self.root.minsize(780, 520)
+        self.root.geometry("900x650")
+        self.root.minsize(880, 550)
 
         # macOS native feel
         self.root.option_add("*tearOff", False)
@@ -87,9 +87,9 @@ class Audio2TextApp:
     # ── UI ─────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        # Добавляем padding вокруг текста вкладок
+        # Padding вокруг текста вкладок
         style = ttk.Style()
-        style.configure("TNotebook.Tab", padding=[10, 4])
+        style.configure("TNotebook.Tab", padding=[6, 4])
 
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill="both", expand=True, padx=8, pady=(6, 0))
@@ -100,14 +100,46 @@ class Audio2TextApp:
         self._build_diarize_tab(notebook)
         self._build_summarize_tab(notebook)
         self._build_process_tab(notebook)
+        self._build_speakers_tab(notebook)
         self._build_monitor_tab(notebook)
         self._build_settings_tab(notebook)
 
-        # Глобальный лог (для старых сообщений)
-        self.log_text = tk.Text(
-            self.root, height=1, state="disabled", wrap="word",
-            font=("Menlo", 10))
-        # Скрыт — каждая вкладка имеет свой лог
+        # ── Глобальный лог внизу окна (с toggle) ──
+        log_bar = ttk.Frame(self.root)
+        log_bar.pack(fill="x", padx=8)
+
+        self._log_visible = tk.BooleanVar(value=True)
+        ttk.Checkbutton(log_bar, text="Лог", variable=self._log_visible,
+                        command=self._toggle_log).pack(side="left")
+        ttk.Button(log_bar, text="⧉", width=2,
+                   command=lambda: self._copy_log(self._global_log)).pack(
+            side="right", padx=2)
+        ttk.Button(log_bar, text="Очистить", width=8,
+                   command=self._clear_log).pack(side="right", padx=2)
+
+        self._log_frame = ttk.Frame(self.root)
+        self._log_frame.pack(fill="both", padx=8, pady=(0, 4))
+
+        self._global_log = tk.Text(
+            self._log_frame, height=6, wrap="word", font=("Menlo", 10))
+        sb = ttk.Scrollbar(self._log_frame, command=self._global_log.yview)
+        self._global_log.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        self._global_log.pack(fill="both", expand=True)
+        # Доступен для выделения/копирования, но не для ввода
+        self._global_log.bind("<Key>", lambda e: "break"
+                              if e.keysym not in ("c", "a") or not (e.state & 0x4)
+                              else None)
+        self._tab_logs.append(self._global_log)
+
+    def _toggle_log(self):
+        if self._log_visible.get():
+            self._log_frame.pack(fill="both", padx=8, pady=(0, 4))
+        else:
+            self._log_frame.pack_forget()
+
+    def _clear_log(self):
+        self._global_log.delete("1.0", "end")
 
     def _make_log_widget(self, parent, row=None, col_span=3) -> tk.Text:
         """Создаёт лог-виджет внутри вкладки. Авто-определяет grid vs pack."""
@@ -257,7 +289,6 @@ class Audio2TextApp:
         self.record_status.pack(anchor="w", pady=(4, 0))
 
         frame.columnconfigure(1, weight=1)
-        self._tab_logs.append(self._make_log_widget(frame))
         self._recorder = None
         self._recording = False
 
@@ -639,7 +670,6 @@ class Audio2TextApp:
 
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(8, weight=1)
-        self._tab_logs.append(self._make_log_widget(frame))
 
         self._live_recording = False
         self._live_stop_event = None
@@ -765,7 +795,7 @@ class Audio2TextApp:
 
     def _build_transcribe_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text="Транскр.")
+        notebook.add(frame, text="Транскрибация")
 
         ttk.Label(frame, text="Файл / папка:").grid(
             row=0, column=0, sticky="w", pady=5)
@@ -809,7 +839,6 @@ class Audio2TextApp:
             row=3, column=0, columnspan=3, pady=10)
 
         frame.columnconfigure(1, weight=1)
-        self._tab_logs.append(self._make_log_widget(frame))
 
     def _run_transcribe(self):
         path = self.trans_path_var.get().strip()
@@ -840,7 +869,7 @@ class Audio2TextApp:
 
     def _build_diarize_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text="Диариз.")
+        notebook.add(frame, text="Диаризация")
 
         ttk.Label(frame, text="Файл / папка:").grid(
             row=0, column=0, sticky="w", pady=5)
@@ -876,7 +905,6 @@ class Audio2TextApp:
             row=3, column=0, columnspan=3, pady=10)
 
         frame.columnconfigure(1, weight=1)
-        self._tab_logs.append(self._make_log_widget(frame))
 
     def _run_diarize(self):
         path = self.diar_path_var.get().strip()
@@ -909,7 +937,7 @@ class Audio2TextApp:
 
     def _build_summarize_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text="Саммари")
+        notebook.add(frame, text="Суммаризация")
 
         # Файл
         top = ttk.Frame(frame)
@@ -980,14 +1008,9 @@ class Audio2TextApp:
                    command=self._run_summarize).grid(
             row=5, column=0, pady=8)
 
-        # Лог
-        log = self._make_log_widget(frame, row=6)
-        self._tab_logs.append(log)
-
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(2, weight=1)
         frame.rowconfigure(4, weight=1)
-        frame.rowconfigure(6, weight=1)
 
     def _pick_text_file(self):
         path = filedialog.askopenfilename(
@@ -1131,7 +1154,6 @@ class Audio2TextApp:
                    command=self._run_process_new).pack(side="left", padx=5)
 
         frame.columnconfigure(1, weight=1)
-        self._tab_logs.append(self._make_log_widget(frame))
 
     def _run_process(self):
         path = self.proc_path_var.get().strip()
@@ -1165,6 +1187,78 @@ class Audio2TextApp:
     # ── Settings tab ───────────────────────────────────────────────────
 
     # ── Monitor tab ─────────────────────────────────────────────────────
+
+    # ── Speakers tab ──────────────────────────────────────────────────
+
+    def _build_speakers_tab(self, notebook: ttk.Notebook):
+        frame = ttk.Frame(notebook, padding=12)
+        notebook.add(frame, text="Спикеры")
+
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(1, weight=1)
+
+        # Toolbar
+        toolbar = ttk.Frame(frame)
+        toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+
+        ttk.Button(toolbar, text="Обновить", width=10,
+                   command=self._speakers_load).pack(side="left")
+        ttk.Button(toolbar, text="Сохранить", width=10,
+                   command=self._speakers_save).pack(side="left", padx=4)
+        ttk.Label(toolbar, text="speakers_db/speakers.yaml",
+                  foreground="gray", font=("Menlo", 10)).pack(
+            side="right")
+
+        # YAML editor
+        editor_frame = ttk.Frame(frame)
+        editor_frame.grid(row=1, column=0, sticky="nsew")
+
+        self._speakers_text = tk.Text(
+            editor_frame, wrap="none", font=("Menlo", 11),
+            undo=True)
+        sb_y = ttk.Scrollbar(editor_frame, command=self._speakers_text.yview)
+        sb_x = ttk.Scrollbar(editor_frame, orient="horizontal",
+                             command=self._speakers_text.xview)
+        self._speakers_text.configure(
+            yscrollcommand=sb_y.set, xscrollcommand=sb_x.set)
+        sb_y.pack(side="right", fill="y")
+        sb_x.pack(side="bottom", fill="x")
+        self._speakers_text.pack(fill="both", expand=True)
+
+        # Подсказка
+        ttk.Label(frame, text="Заполните поле name: 'Имя Фамилия' для каждого спикера",
+                  foreground="gray", font=("Helvetica", 10)).grid(
+            row=2, column=0, sticky="w", pady=(4, 0))
+
+        self._speakers_load()
+
+    def _speakers_load(self):
+        """Загружает speakers.yaml в редактор."""
+        from speaker_db import SPEAKERS_FILE, _ensure_dirs
+        _ensure_dirs()
+        if SPEAKERS_FILE.exists():
+            text = SPEAKERS_FILE.read_text(encoding="utf-8")
+        else:
+            text = "# База голосов — заполните поле name для каждого спикера\nspeakers: {}\n"
+        self._speakers_text.delete("1.0", "end")
+        self._speakers_text.insert("1.0", text)
+        self._speakers_text.edit_reset()
+
+    def _speakers_save(self):
+        """Сохраняет редактор в speakers.yaml."""
+        from speaker_db import SPEAKERS_FILE, _ensure_dirs
+        import yaml
+        _ensure_dirs()
+        text = self._speakers_text.get("1.0", "end").strip()
+        try:
+            yaml.safe_load(text)  # валидация
+        except yaml.YAMLError as e:
+            messagebox.showerror("audio2text", f"Ошибка YAML:\n{e}")
+            return
+        SPEAKERS_FILE.write_text(text + "\n", encoding="utf-8")
+        self._log("Спикеры сохранены")
+
+    # ── Monitor tab ──────────────────────────────────────────────────
 
     def _build_monitor_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=12)
@@ -1224,12 +1318,6 @@ class Audio2TextApp:
             row=8, column=1, sticky="w", padx=6)
         self._mon_sys_mem_bar = ttk.Progressbar(frame, length=300, maximum=100)
         self._mon_sys_mem_bar.grid(row=8, column=2, sticky="ew", padx=(0, 6))
-
-        # История (текстовый лог)
-        frame.rowconfigure(10, weight=1)
-        frame.columnconfigure(2, weight=1)
-        self._mon_log = self._make_log_widget(frame, row=10, col_span=3)
-        self._tab_logs.append(self._mon_log)
 
         # Запуск обновления
         self._mon_process = None
