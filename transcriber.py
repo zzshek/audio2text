@@ -53,6 +53,22 @@ class MLXTranscriber(TranscriberBase):
         self._engine = mlx_whisper
         logger.info(f"MLX Whisper готов ({time.time() - start:.1f} сек)")
 
+    def unload(self):
+        """Выгружает модель из памяти."""
+        self._engine = None
+        # Очищаем внутренний кэш mlx_whisper (модель кешируется на уровне модуля)
+        import sys
+        for key in [k for k in sys.modules if k.startswith("mlx_whisper")]:
+            del sys.modules[key]
+        import gc
+        gc.collect()
+        try:
+            import mlx.core as mx
+            mx.metal.clear_cache()
+        except Exception:
+            pass
+        logger.info("MLX Whisper: модель выгружена")
+
     def transcribe(self, audio_path: str) -> dict:
         logger.info(f"[MLX] Транскрибация: {Path(audio_path).name}")
         start = time.time()
@@ -106,6 +122,19 @@ class FasterWhisperTranscriber(TranscriberBase):
         from faster_whisper import WhisperModel
         self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
         logger.info(f"faster-whisper готов ({time.time() - start:.1f} сек)")
+
+    def unload(self):
+        """Выгружает модель из памяти."""
+        self.model = None
+        import gc
+        gc.collect()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+        logger.info("faster-whisper: модель выгружена")
 
     def transcribe(self, audio_path: str) -> dict:
         logger.info(f"[faster-whisper] Транскрибация: {Path(audio_path).name}")

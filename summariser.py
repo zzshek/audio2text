@@ -200,6 +200,19 @@ class LLMSummarizer:
         self._mlx_model = None
         self._mlx_tokenizer = None
 
+    def unload(self):
+        """Выгружает LLM из памяти."""
+        self._mlx_model = None
+        self._mlx_tokenizer = None
+        import gc
+        gc.collect()
+        try:
+            import mlx.core as mx
+            mx.metal.clear_cache()
+        except Exception:
+            pass
+        logger.info("LLM: модель выгружена")
+
     def _get_prompt(self, text: str) -> str:
         """Формирует промпт в зависимости от задачи."""
         text = _clean_transcript(text)

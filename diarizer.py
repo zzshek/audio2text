@@ -49,6 +49,21 @@ class Diarizer:
 
         self._pipeline = None
 
+    def unload(self):
+        """Выгружает pipeline из памяти."""
+        self._pipeline = None
+        import gc
+        gc.collect()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                torch.mps.empty_cache()
+        except Exception:
+            pass
+        logger.info("pyannote: pipeline выгружен")
+
     def _load_pipeline(self):
         """Ленивая загрузка pipeline (pyannote тяжёлый)."""
         if self._pipeline is not None:

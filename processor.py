@@ -27,7 +27,7 @@ def _save_text(path: Path, content: str) -> None:
     logger.info(f"Сохранено: {path}")
 
 
-def transcribe_file(audio_path: str, config: dict) -> dict:
+def transcribe_file(audio_path: str, config: dict, unload: bool = False) -> dict:
     """Транскрибирует один аудиофайл. Сохраняет .txt и _timed.txt рядом."""
     from transcriber import create_transcriber
 
@@ -51,10 +51,14 @@ def transcribe_file(audio_path: str, config: dict) -> dict:
         "\n".join(timed_lines),
     )
 
+    if unload:
+        transcriber.unload()
+
     return result
 
 
-def diarize_file(audio_path: str, config: dict, transcription: dict | None = None) -> list[dict]:
+def diarize_file(audio_path: str, config: dict, transcription: dict | None = None,
+                 unload: bool = False) -> list[dict]:
     """Диаризация аудиофайла. Если есть транскрибация — объединяет."""
     from diarizer import Diarizer
 
@@ -68,12 +72,16 @@ def diarize_file(audio_path: str, config: dict, transcription: dict | None = Non
         )
         text = Diarizer.format_diarized_text(merged)
         _save_text(audio.parent / f"{audio.stem}_diar.txt", text)
+        if unload:
+            diar.unload()
         return merged
 
+    if unload:
+        diar.unload()
     return turns
 
 
-def summarize_file(text_path: str, config: dict) -> str:
+def summarize_file(text_path: str, config: dict, unload: bool = False) -> str:
     """Суммаризирует текстовый файл."""
     cfg = config.get("summarization", {})
     llm_cfg = config.get("llm", {})
@@ -93,6 +101,10 @@ def summarize_file(text_path: str, config: dict) -> str:
 
     out_path = Path(text_path).parent / f"{Path(text_path).stem}_summary.txt"
     _save_text(out_path, summary)
+
+    if unload and hasattr(s, "unload"):
+        s.unload()
+
     return summary
 
 
@@ -105,7 +117,7 @@ def process_file(audio_path: str, config: dict) -> None:
     # 1. Транскрибация
     logger.info("[1/4] Транскрибация...")
     t1 = time.time()
-    result = transcribe_file(str(audio), config)
+    result = transcribe_file(str(audio), config, unload=True)
     logger.info(f"[1/4] Транскрибация — {time.time() - t1:.1f} сек")
 
     # 2. Диаризация
@@ -114,7 +126,7 @@ def process_file(audio_path: str, config: dict) -> None:
         logger.info("[2/4] Диаризация...")
         t2 = time.time()
         try:
-            diarize_file(str(audio), config, transcription=result)
+            diarize_file(str(audio), config, transcription=result, unload=True)
             logger.info(f"[2/4] Диаризация — {time.time() - t2:.1f} сек")
         except Exception as e:
             logger.error(f"Ошибка диаризации: {e}")
@@ -133,7 +145,7 @@ def process_file(audio_path: str, config: dict) -> None:
             logger.info("[3/4] Суммаризация...")
             t3 = time.time()
             try:
-                summary = summarize_file(str(txt_path), config)
+                summary = summarize_file(str(txt_path), config, unload=True)
                 logger.info(f"[3/4] Суммаризация — {time.time() - t3:.1f} сек")
             except Exception as e:
                 logger.error(f"Ошибка суммаризации: {e}")
