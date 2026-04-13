@@ -308,16 +308,19 @@ class Audio2TextApp:
             import sounddevice as sd
             devs = sd.query_devices()
             result = []
+            is_busy = self._recording or getattr(self, "_live_recording", False)
             for i, d in enumerate(devs):
                 if d["max_input_channels"] <= 0:
                     continue
-                # Проверяем что устройство реально может записывать
                 if d.get("default_samplerate", 0) <= 0:
                     continue
-                try:
-                    sd.check_input_settings(device=i, samplerate=16000)
-                except sd.PortAudioError:
-                    continue
+                # Проверяем устройство только когда запись не идёт
+                # (check_input_settings блокирует PortAudio)
+                if not is_busy:
+                    try:
+                        sd.check_input_settings(device=i, samplerate=16000)
+                    except sd.PortAudioError:
+                        continue
                 result.append((i, d["name"]))
             return result
         except Exception as e:
@@ -330,6 +333,9 @@ class Audio2TextApp:
         return any(p in lower for p in cls._VIRTUAL_PATTERNS)
 
     def _refresh_all_devices(self):
+        if self._recording or getattr(self, "_live_recording", False):
+            self._log("Обновление устройств недоступно во время записи")
+            return
         devs = self._get_input_device_list()
         items = [f"{i}: {name}" for i, name in devs]
         mic_values = ["По умолчанию"] + items
