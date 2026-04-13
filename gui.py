@@ -303,12 +303,22 @@ class Audio2TextApp:
         "blackhole", "soundflower", "loopback audio",
         "virtual cable", "vb-cable"]
 
+    # Устройства которые показываются как input но не могут записывать
+    _EXCLUDE_PATTERNS = ["find my", "find мой"]
+
     def _get_input_device_list(self) -> list[tuple[int, str]]:
         try:
             import sounddevice as sd
             devs = sd.query_devices()
-            return [(i, d["name"]) for i, d in enumerate(devs)
-                    if d["max_input_channels"] > 0]
+            result = []
+            for i, d in enumerate(devs):
+                if d["max_input_channels"] <= 0:
+                    continue
+                name = d["name"]
+                if any(p in name.lower() for p in self._EXCLUDE_PATTERNS):
+                    continue
+                result.append((i, name))
+            return result
         except Exception as e:
             self._log(f"Ошибка получения устройств: {e}")
             return []
