@@ -132,6 +132,7 @@ class Recorder:
         self._dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]
         self._vu_callback = vu_callback
         self._streams: list = []
+        self._dev_list = dev_list  # сохраняем для отслеживания дефолта
         blocksize = int(self.sample_rate * 0.5)
 
         def make_callback(idx):
@@ -177,12 +178,24 @@ class Recorder:
                 blocksize=blocksize,
             ))
 
+        # Запоминаем текущий дефолтный input device для автодетекта
+        try:
+            self._last_default_input = sd.default.device[0]
+        except Exception:
+            self._last_default_input = None
+        self._poll_counter = 0
+
         try:
             for s in self._streams:
                 s.start()
             logger.info("Нажмите Ctrl+C для остановки записи...")
             while self._recording:
                 time.sleep(0.1)
+                # Каждые ~2 сек проверяем не сменилось ли дефолтное устройство
+                self._poll_counter += 1
+                if self._poll_counter >= 20:
+                    self._poll_counter = 0
+                    self._check_default_device_change()
         except KeyboardInterrupt:
             pass
         finally:
@@ -207,6 +220,25 @@ class Recorder:
     def stop(self) -> None:
         """Останавливает запись из другого потока."""
         self._recording = False
+
+    def _check_default_device_change(self):
+        """Проверяет не сменилось ли дефолтное устройство (наушники и т.п.)."""
+        # Только если хотя бы одно устройство было "По умолчанию" (None)
+        if not any(d is None for d in self._dev_list):
+            return
+        try:
+            current_default = sd.default.device[0]
+        except Exception:
+            return
+        if current_default == self._last_default_input:
+            return
+        self._last_default_input = current_default
+        name = sd.query_devices(current_default)["name"]
+        logger.info(f"Аудиоустройство изменено → {name}, переключение...")
+        try:
+            self.switch_devices(self._dev_list)
+        except Exception as e:
+            logger.warning(f"Ошибка автопереключения: {e}")
 
     def switch_devices(self, devices) -> None:
         """Переключает устройства записи на лету без остановки.
