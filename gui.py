@@ -373,7 +373,16 @@ class Audio2TextApp:
             if sys_var and sys_var.get() == "Не выбрано" and virtual_found:
                 sys_var.set(virtual_found)
             if hint_var:
-                hint_var.set("")
+                if virtual_found:
+                    hint_var.set(
+                        "Для записи звука собеседника (Telegram, Zoom) "
+                        "выберите BlackHole в «Системный звук». "
+                        "Настройте Multi-Output Device в Audio MIDI Setup.")
+                else:
+                    hint_var.set(
+                        "BlackHole не найден. Установите: "
+                        "brew install blackhole-2ch — "
+                        "нужен для записи звука собеседника.")
 
     @staticmethod
     def _parse_device_id(selection: str) -> int | None:

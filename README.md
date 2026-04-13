@@ -1,6 +1,6 @@
 # audio2text
 
-Запись, транскрибация и диаризация встреч на macOS (Apple Silicon optimized).
+Запись, транскрибация, диаризация и суммаризация встреч на macOS (Apple Silicon optimized).
 
 ## Требования
 
@@ -17,7 +17,7 @@
 brew install ffmpeg portaudio blackhole-2ch
 ```
 
-> `blackhole-2ch` — виртуальное аудиоустройство для захвата системного звука (Zoom, Teams, браузер).
+> `blackhole-2ch` — виртуальное аудиоустройство для захвата системного звука (Telegram, Zoom, Teams, браузер).
 
 ### 2. Клонирование и установка
 
@@ -28,7 +28,7 @@ cd audio2text
 # Установка uv (если ещё нет)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Полная установка для Mac (MLX + диаризация + суммаризация)
+# Полная установка для Mac (MLX + диаризация + суммаризация + LLM)
 uv sync --extra mac
 
 # Или минимальная (только транскрибация через MLX)
@@ -52,137 +52,121 @@ diarization:
   hf_token: "hf_ваш_токен"
 ```
 
-## CLI-команды
+### 4. Настройка записи системного звука (BlackHole)
 
-Все команды запускаются через `uv run audio2text` или, если пакет установлен, просто `audio2text`.
+Чтобы записывать звук собеседника из Telegram, Zoom, Teams, браузера — нужно настроить виртуальное аудиоустройство:
 
-### Запись звонка с микрофона
+**Шаг 1.** Откройте **Audio MIDI Setup** (Finder → Приложения → Утилиты → Настройка Audio MIDI)
 
-```bash
-# Записать аудио (Ctrl+C для остановки)
-uv run audio2text record
+**Шаг 2.** Нажмите `+` внизу слева → **Создать устройство с несколькими выходами** (Multi-Output Device)
 
-# Указать конкретное устройство ввода
-uv run audio2text record --device 2
-```
+**Шаг 3.** Отметьте галочками:
+- ✅ Динамики MacBook Pro (или ваши наушники)
+- ✅ BlackHole 2ch
 
-Файл сохраняется в `recordings/YYYY-MM-DD_Day/meeting_HH-MM.opus`.
+> Это позволяет слышать звук И записывать его одновременно.
 
-Посмотреть доступные устройства:
+**Шаг 4.** В **Системные настройки → Звук → Выход** — выберите созданный "Multi-Output Device"
 
-```bash
-uv run audio2text devices
-```
+**Шаг 5.** В audio2text (GUI):
+- **Микрофон:** Микрофон MacBook Pro (или AirPods) — пишет ваш голос
+- **Системный звук:** BlackHole 2ch — пишет звук собеседника
 
-### Транскрибация файла в текст
+Оба канала микшируются в одну запись автоматически.
 
-```bash
-# Транскрибировать один файл
-uv run audio2text transcribe path/to/audio.opus
-
-# Транскрибировать все файлы в папке
-uv run audio2text transcribe path/to/folder/
-
-# Указать язык и бэкенд
-uv run audio2text transcribe file.mp3 --language en --backend mlx
-```
-
-Поддерживаемые форматы: `.opus`, `.ogg`, `.wav`, `.mp3`, `.m4a`, `.flac`, `.webm` — ffmpeg автоматически обрабатывает конвертацию.
-
-Результат:
-- `file.txt` — полный текст
-- `file_timed.txt` — текст с таймкодами
-
-### Транскрибация с диаризацией (определение спикеров)
-
-```bash
-# Диаризация одного файла
-uv run audio2text diarize path/to/audio.opus
-
-# С указанием количества спикеров
-uv run audio2text diarize audio.opus --min-speakers 2 --max-speakers 4
-```
-
-Результат:
-- `file.txt` — полный текст
-- `file_timed.txt` — текст с таймкодами
-- `file_diar.txt` — текст с разметкой спикеров (`[MM:SS-MM:SS] Speaker_N: текст`)
-
-### Полный pipeline (транскрибация + диаризация + суммаризация)
-
-```bash
-# Обработать один файл
-uv run audio2text process path/to/audio.opus
-
-# Обработать все файлы в папке
-uv run audio2text process path/to/folder/
-```
-
-Выполняет последовательно: транскрибация → диаризация → суммаризация (если включена в конфиге).
-
-### Запись + полная обработка
-
-Записать звонок, затем сразу обработать:
-
-```bash
-# 1. Записать (Ctrl+C для остановки)
-uv run audio2text record
-
-# 2. Обработать записанный файл
-uv run audio2text process recordings/2026-04-04_Friday/meeting_14-30.opus
-```
-
-Или одной командой через shell:
-
-```bash
-FILE=$(uv run audio2text record 2>/dev/null | grep "Файл:" | awk '{print $2}') && \
-uv run audio2text process "$FILE"
-```
-
-### Информация о системе
-
-```bash
-uv run audio2text info
-```
-
-Покажет: ОС, чип, доступные бэкенды (MLX/CUDA), установленные библиотеки, выбранную модель.
+> **Совет:** Если подключаете наушники, устройство автоматически переключится (при выборе "По умолчанию"). Также можно переключить вручную во время записи — через комбобокс.
 
 ## GUI (графический интерфейс)
-
-Помимо CLI доступен графический интерфейс на базе tkinter.
-
-### Запуск
 
 ```bash
 uv run python gui.py
 ```
 
-Откроется окно с пятью вкладками:
-
 | Вкладка | Описание |
 |---------|----------|
-| **Запись** | Запись аудио с микрофона. Выбор устройства ввода, индикатор уровня (VU-метр). Кнопка «Начать запись» / «Остановить» |
-| **Транскрибация** | Транскрибация одного файла или всех файлов в папке. Выбор языка и backend (auto / mlx / faster-whisper) |
-| **Диаризация** | Транскрибация + определение спикеров. Можно задать мин./макс. количество спикеров |
-| **Полный pipeline** | Запуск полного цикла: транскрибация → диаризация → суммаризация. Настройки берутся из вкладки «Настройки» и `config.yaml` |
-| **Настройки** | Backend, модели (MLX/faster-whisper), язык, beam size, вкл/выкл диаризации, HF-токен. Кнопки «Информация о системе» и «Аудиоустройства» |
+| **Запись** | Запись с микрофона/системного звука. VU-метр, Mute, горячая смена устройств |
+| **Live** | Запись + real-time транскрибация (текст появляется во время записи) |
+| **Транскрибация** | Транскрибация файла или папки |
+| **Диаризация** | Транскрибация + определение спикеров |
+| **Суммаризация** | Суммаризация с редактируемым промптом. Экспорт в Obsidian |
+| **Pipeline** | Полный цикл: транскрибация → диаризация → суммаризация → Obsidian |
+| **Спикеры** | Редактор базы голосов — вписать ФИО для автоопределения |
+| **Монитор** | CPU, RAM, потоки процесса в реальном времени |
+| **Настройки** | Backend, модели, язык, HF-токен, Obsidian vault |
 
-В нижней части окна расположена панель лога, куда выводятся все события и ошибки в реальном времени.
+## CLI-команды
 
-## Сводная таблица команд
+```bash
+# Запись
+uv run audio2text record
+uv run audio2text record --device 2
 
-| Команда | Что делает |
-|---------|-----------|
-| `audio2text record` | Записать аудио с микрофона |
-| `audio2text transcribe <path>` | Транскрибировать в текст |
-| `audio2text diarize <path>` | Транскрибировать + определить спикеров |
-| `audio2text process <path>` | Полный pipeline (transcribe + diarize + summarize) |
-| `audio2text devices` | Показать аудиоустройства |
-| `audio2text info` | Информация о системе и бэкендах |
+# Live запись + транскрибация
+uv run audio2text live
+
+# Транскрибация
+uv run audio2text transcribe path/to/audio.opus
+
+# Диаризация
+uv run audio2text diarize path/to/audio.opus --min-speakers 2 --max-speakers 4
+
+# Полный pipeline
+uv run audio2text process path/to/audio.opus
+
+# Регистрация спикеров в базе голосов
+uv run audio2text speakers-register path/to/audio.opus
+uv run audio2text speakers-list
+
+# Устройства и информация
+uv run audio2text devices
+uv run audio2text info
+```
+
+## Структура файлов
+
+### Записи
+
+```
+recordings/
+  2026-04-10_Friday/
+    2026-04-10 16-04 Название встречи/
+      2026-04-10 16-04 Название встречи.opus      # аудио
+      2026-04-10 16-04 Название встречи.txt        # текст
+      2026-04-10 16-04 Название встречи_timed.txt  # с таймкодами
+      2026-04-10 16-04 Название встречи_diar.txt   # со спикерами
+      2026-04-10 16-04 Название встречи_summary.txt # резюме
+```
+
+### Obsidian
+
+```
+obsidian_vault/Meetings/
+  2026-04-10 Название встречи/
+    2026-04-10 Название встречи.md     # Markdown с frontmatter
+```
+
+### База спикеров
+
+```
+speakers_db/
+  speakers.yaml       # маппинг голос → ФИО (редактировать в GUI или вручную)
+  embeddings/          # голосовые отпечатки (.npy)
+```
+
+## Pipeline: как работает
+
+```
+АУДИО (.opus) → Транскрибация (Whisper) → Диаризация (pyannote)
+  → Идентификация спикеров (по базе голосов)
+  → Суммаризация (Qwen2.5-14B / API)
+  → Obsidian export (.md)
+```
+
+Подробная документация: [PIPELINE.md](PIPELINE.md)
 
 ## Конфигурация
 
-Все настройки в файле `config.yaml`. Основные параметры:
+Все настройки в `config.yaml`:
 
 ```yaml
 recording:
@@ -196,26 +180,26 @@ transcription:
 
 diarization:
   enabled: true
-  hf_token: ""          # обязателен для работы
+  hf_token: ""          # обязателен для диаризации
 
-summarization:
-  enabled: false        # включить при необходимости
+llm:
+  enabled: true
+  provider: local       # local | openai | anthropic
+  local_model: mlx-community/Qwen2.5-14B-Instruct-4bit
+
+obsidian:
+  enabled: true
+  vault_path: ""        # путь к Obsidian vault
+  folder: "Meetings"
 ```
 
-Переопределить конфиг:
-
-```bash
-uv run audio2text --config my_config.yaml transcribe file.opus
-```
-
-## Память и модели
-
-При первом запуске модели скачиваются автоматически:
+## Модели и память
 
 | Модель | Размер | Назначение |
 |--------|--------|-----------|
-| whisper-large-v3-turbo (MLX) | ~1.6 GB | Транскрибация |
-| pyannote/speaker-diarization-3.1 | ~0.5 GB | Диаризация |
-| mbart_ruDialogSum | ~2.5 GB | Суммаризация (опц.) |
+| whisper-large-v3-turbo (MLX) | ~2.3 GB | Транскрибация |
+| pyannote/speaker-diarization-3.1 | ~3-4 GB | Диаризация |
+| pyannote/embedding | ~0.1 GB | Идентификация спикеров |
+| Qwen2.5-14B-Instruct-4bit | ~8.5 GB | Суммаризация |
 
-Требования к памяти (unified memory): ~5 GB без LLM, ~9.5 GB с LLM.
+Peak memory: ~8.5 GB (модели выгружаются между шагами pipeline).
