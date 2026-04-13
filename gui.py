@@ -59,6 +59,8 @@ class Audio2TextApp:
         self.config = load_config("config.yaml")
         self.log_queue: queue.Queue[str] = queue.Queue()
         self._running_task: threading.Thread | None = None
+        self._recording = False
+        self._live_recording = False
 
         self._tab_logs: list[tk.Text] = []
         self._setup_logging()
@@ -202,6 +204,8 @@ class Audio2TextApp:
             dev_frame, textvariable=self.rec_mic_var,
             state="readonly", width=25)
         self.rec_mic_combo.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+        self.rec_mic_combo.bind("<<ComboboxSelected>>",
+                                lambda e: self._on_rec_device_change())
 
         self.rec_mic_vu = tk.DoubleVar(value=0)
         ttk.Progressbar(dev_frame, variable=self.rec_mic_vu,
@@ -220,6 +224,8 @@ class Audio2TextApp:
             dev_frame, textvariable=self.rec_sys_var,
             state="readonly", width=25)
         self.rec_sys_combo.grid(row=2, column=1, sticky="ew", padx=(5, 0))
+        self.rec_sys_combo.bind("<<ComboboxSelected>>",
+                                lambda e: self._on_rec_device_change())
 
         ttk.Button(dev_frame, text="↻", width=3,
                    command=self._refresh_all_devices).grid(
@@ -452,6 +458,18 @@ class Audio2TextApp:
             self._start_record()
         else:
             self._stop_record()
+
+    def _on_rec_device_change(self):
+        """Горячая смена устройства во время записи."""
+        if not self._recording or not self._recorder:
+            return
+        devs, _ = self._collect_devices(
+            self.rec_mic_enabled, self.rec_mic_var,
+            self.rec_sys_enabled, self.rec_sys_var)
+        try:
+            self._recorder.switch_devices(devs)
+        except Exception as e:
+            self._log(f"Ошибка смены устройства: {e}")
 
     def _toggle_mute(self):
         if not self._recorder:

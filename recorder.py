@@ -129,29 +129,32 @@ class Recorder:
         session_dir.mkdir(parents=True, exist_ok=True)
 
         self._recording = True
-        dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]
+        self._dev_frames: list[list[np.ndarray]] = [[] for _ in dev_list]
+        self._vu_callback = vu_callback
+        self._streams: list = []
+        blocksize = int(self.sample_rate * 0.5)
 
         def make_callback(idx):
             def cb(indata, frames, time_info, status):
                 if status:
                     logger.warning(f"Audio status: {status}")
                 if self._muted:
-                    # Записываем тишину, сохраняя длительность
                     silence = np.zeros_like(indata)
                     with self._lock:
-                        dev_frames[idx].append(silence)
-                    if vu_callback:
-                        vu_callback(idx, 0.0)
+                        self._dev_frames[idx].append(silence)
+                    if self._vu_callback:
+                        self._vu_callback(idx, 0.0)
                     return
                 with self._lock:
-                    dev_frames[idx].append(indata.copy())
+                    self._dev_frames[idx].append(indata.copy())
                 rms = float(np.sqrt(np.mean(indata ** 2)))
-                if vu_callback:
-                    vu_callback(idx, rms)
+                if self._vu_callback:
+                    self._vu_callback(idx, rms)
                 else:
                     bars = min(int(rms * 200), 40)
                     print(f"\r  {'█' * bars}{'░' * (40 - bars)} {rms:.4f}", end="", flush=True)
             return cb
+        self._make_callback = make_callback
 
         logger.info(
             f"Запись начата (sample_rate={self.sample_rate}, "
@@ -163,11 +166,9 @@ class Recorder:
             logger.info(f"Устройство{label}: {name}")
 
         start_time = time.time()
-        blocksize = int(self.sample_rate * 0.5)
 
-        streams = []
         for i, dev in enumerate(dev_list):
-            streams.append(sd.InputStream(
+            self._streams.append(sd.InputStream(
                 samplerate=self.sample_rate,
                 channels=self.channels,
                 dtype="float32",
@@ -177,7 +178,7 @@ class Recorder:
             ))
 
         try:
-            for s in streams:
+            for s in self._streams:
                 s.start()
             logger.info("Нажмите Ctrl+C для остановки записи...")
             while self._recording:
@@ -186,18 +187,18 @@ class Recorder:
             pass
         finally:
             self._recording = False
-            for s in streams:
+            for s in self._streams:
                 s.stop()
                 s.close()
 
         duration = time.time() - start_time
         logger.info(f"Запись остановлена. Длительность: {duration:.1f} сек")
 
-        if not any(dev_frames):
+        if not any(self._dev_frames):
             logger.warning("Нет записанных данных")
             return Path()
 
-        audio_data = _mix_device_frames(dev_frames)
+        audio_data = _mix_device_frames(self._dev_frames)
 
         output_path = self._save(audio_data, session_dir, base_name)
         logger.info(f"Сохранено: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} МБ)")
@@ -206,6 +207,56 @@ class Recorder:
     def stop(self) -> None:
         """Останавливает запись из другого потока."""
         self._recording = False
+
+    def switch_devices(self, devices) -> None:
+        """Переключает устройства записи на лету без остановки.
+
+        Args:
+            devices: int, list[int], или None — новые устройства.
+        """
+        if not self._recording:
+            return
+
+        if devices is None:
+            new_devs = [None]
+        elif isinstance(devices, int):
+            new_devs = [devices]
+        else:
+            new_devs = devices if devices else [None]
+
+        # Останавливаем текущие streams
+        for s in self._streams:
+            try:
+                s.stop()
+                s.close()
+            except Exception:
+                pass
+
+        blocksize = int(self.sample_rate * 0.5)
+
+        # Подгоняем dev_frames под новое количество устройств
+        with self._lock:
+            while len(self._dev_frames) < len(new_devs):
+                self._dev_frames.append([])
+
+        # Открываем новые streams
+        self._streams = []
+        for i, dev in enumerate(new_devs):
+            self._streams.append(sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=self.channels,
+                dtype="float32",
+                device=dev,
+                callback=self._make_callback(i),
+                blocksize=blocksize,
+            ))
+
+        for s in self._streams:
+            s.start()
+
+        for i, d in enumerate(new_devs):
+            name = sd.query_devices(d if d is not None else sd.default.device[0])["name"]
+            logger.info(f"Устройство переключено: {name}")
 
     def mute(self) -> None:
         """Выключает микрофон (записывает тишину)."""
