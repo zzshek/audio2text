@@ -296,7 +296,7 @@ class Audio2TextApp:
 
         frame.columnconfigure(1, weight=1)
         self._recorder = None
-        self._recording = False
+        self._last_recorded_file: Path | None = None
 
     def _test_record_devices(self):
         self._test_devices(
@@ -523,6 +523,7 @@ class Audio2TextApp:
                     devices=devs, vu_callback=vu_cb,
                     custom_name=custom_name)
                 if path and path.exists():
+                    self._last_recorded_file = path
                     self.log_queue.put(f"Файл сохранён: {path}")
             except Exception as e:
                 self.log_queue.put(f"Ошибка записи: {e}")
@@ -547,25 +548,24 @@ class Audio2TextApp:
 
     def _run_record_pipeline(self):
         """Запуск pipeline для последнего записанного файла."""
-        output_dir = Path(
-            self.config.get("recording", {}).get("output_dir", "recordings"))
-        if not output_dir.exists():
-            messagebox.showwarning("audio2text", "Папка recordings не найдена.")
-            return
-        # Находим последний аудиофайл
-        latest = None
-        for day_dir in sorted(output_dir.iterdir(), reverse=True):
-            if not day_dir.is_dir():
-                continue
-            for f in sorted(day_dir.iterdir(), reverse=True):
-                if f.is_file() and f.suffix.lower() in SUPPORTED_AUDIO:
-                    latest = f
-                    break
-            if latest:
-                break
-        if not latest:
-            messagebox.showwarning("audio2text", "Нет аудиофайлов.")
-            return
+        # Сначала пробуем файл из текущей сессии
+        if self._last_recorded_file and self._last_recorded_file.exists():
+            latest = self._last_recorded_file
+        else:
+            # Рекурсивный поиск самого нового аудиофайла
+            output_dir = Path(
+                self.config.get("recording", {}).get("output_dir", "recordings"))
+            if not output_dir.exists():
+                messagebox.showwarning("audio2text", "Папка recordings не найдена.")
+                return
+            audio_files = sorted(
+                (f for f in output_dir.rglob("*")
+                 if f.is_file() and f.suffix.lower() in SUPPORTED_AUDIO),
+                key=lambda f: f.stat().st_mtime, reverse=True)
+            if not audio_files:
+                messagebox.showwarning("audio2text", "Нет аудиофайлов.")
+                return
+            latest = audio_files[0]
         self._log(f"Pipeline: {latest.name}")
         self._apply_transcription_overrides()
         self._run_in_thread(self._do_record_pipeline, str(latest))
