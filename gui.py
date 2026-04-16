@@ -236,19 +236,24 @@ class Audio2TextApp:
                         maximum=1.0, mode="determinate").grid(
             row=3, column=0, columnspan=3, sticky="ew", pady=(2, 6))
 
+        # Кнопка настройки BlackHole
+        ttk.Button(dev_frame, text="Настроить системный звук",
+                   command=self._setup_system_audio).grid(
+            row=4, column=0, columnspan=3, sticky="w", pady=(2, 4))
+
         # Hint
         self.rec_hint_var = tk.StringVar(value="")
         ttk.Label(dev_frame, textvariable=self.rec_hint_var,
                   wraplength=350, foreground="gray",
                   font=("Helvetica", 10)).grid(
-            row=4, column=0, columnspan=3, sticky="w")
+            row=5, column=0, columnspan=3, sticky="w")
 
         # Название
         ttk.Label(dev_frame, text="Название:").grid(
-            row=5, column=0, sticky="w", pady=(6, 0))
+            row=6, column=0, sticky="w", pady=(6, 0))
         self.rec_name_var = tk.StringVar(value="")
         ttk.Entry(dev_frame, textvariable=self.rec_name_var).grid(
-            row=5, column=1, columnspan=2, sticky="ew",
+            row=6, column=1, columnspan=2, sticky="ew",
             padx=(5, 0), pady=(6, 0))
 
         dev_frame.columnconfigure(1, weight=1)
@@ -467,6 +472,64 @@ class Audio2TextApp:
             self._start_record()
         else:
             self._stop_record()
+
+    def _setup_system_audio(self):
+        """Запускает настройку BlackHole / Multi-Output Device."""
+        import platform
+        if platform.system() != "Darwin":
+            messagebox.showinfo("audio2text",
+                                "Настройка системного звука доступна только на macOS.")
+            return
+
+        import subprocess
+        # Проверяем BlackHole
+        r = subprocess.run(["system_profiler", "SPAudioDataType"],
+                           capture_output=True, text=True, timeout=10)
+        has_blackhole = "BlackHole" in r.stdout
+        has_multi = "Multi-Output" in r.stdout
+
+        if not has_blackhole:
+            if messagebox.askyesno(
+                "audio2text",
+                "BlackHole не установлен.\n\n"
+                "BlackHole — виртуальное устройство для записи "
+                "системного звука (Telegram, Zoom, браузер).\n\n"
+                "Установить через brew?\n"
+                "(brew install blackhole-2ch)"):
+                self._log("Установка BlackHole...")
+                r = subprocess.run(
+                    ["brew", "install", "blackhole-2ch"],
+                    capture_output=True, text=True)
+                if r.returncode == 0:
+                    self._log("BlackHole установлен. Перезагрузите Mac.")
+                    messagebox.showinfo("audio2text",
+                                        "BlackHole установлен!\n"
+                                        "Перезагрузите Mac, затем нажмите эту кнопку снова.")
+                else:
+                    self._log(f"Ошибка установки: {r.stderr}")
+            return
+
+        if has_multi:
+            messagebox.showinfo(
+                "audio2text",
+                "Multi-Output Device уже настроен!\n\n"
+                "Убедитесь:\n"
+                "• Системные настройки → Звук → Выход → Multi-Output Device\n"
+                "• В audio2text: Системный звук → BlackHole 2ch")
+            return
+
+        # BlackHole есть, Multi-Output нет — открываем Audio MIDI Setup
+        messagebox.showinfo(
+            "audio2text",
+            "Сейчас откроется Audio MIDI Setup.\n\n"
+            "Что сделать:\n"
+            "1. Нажмите + внизу слева\n"
+            "2. Выберите «Create Multi-Output Device»\n"
+            "3. Отметьте: ваши динамики/наушники + BlackHole 2ch\n"
+            "4. Закройте Audio MIDI Setup\n\n"
+            "Затем:\n"
+            "Системные настройки → Звук → Выход → Multi-Output Device")
+        subprocess.Popen(["open", "-a", "Audio MIDI Setup"])
 
     def _on_rec_device_change(self):
         """Горячая смена устройства во время записи."""
