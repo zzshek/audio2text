@@ -1431,54 +1431,53 @@ class Audio2TextApp:
         self._monitor_update()
 
     def _monitor_update(self):
-        """Обновляет метрики монитора каждые 2 секунды."""
+        """Обновляет метрики монитора каждые 5 секунд (только если вкладка видна)."""
         try:
+            # Пропускаем обновление если вкладка Монитор не активна
+            notebook = self.root.winfo_children()[0]
+            if hasattr(notebook, 'index') and hasattr(notebook, 'select'):
+                current_tab = notebook.tab(notebook.select(), "text")
+                if current_tab != "Монитор":
+                    self.root.after(5000, self._monitor_update)
+                    return
+
             import psutil
             import os
             import time as _time
 
             if self._mon_process is None:
                 self._mon_process = psutil.Process(os.getpid())
-                # Первый вызов cpu_percent для инициализации
                 self._mon_process.cpu_percent()
 
             proc = self._mon_process
 
-            # Process CPU (% от всех ядер)
             cpu_pct = proc.cpu_percent()
             self._mon_cpu_var.set(f"{cpu_pct:.1f}%")
             self._mon_cpu_bar["value"] = min(cpu_pct, 100)
 
-            # Process Memory
             mem_info = proc.memory_info()
             rss_mb = mem_info.rss / 1024 / 1024
             rss_gb = rss_mb / 1024
-            total_mem = psutil.virtual_memory().total / 1024 / 1024
-            mem_pct = (mem_info.rss / psutil.virtual_memory().total) * 100
+            vmem = psutil.virtual_memory()
+            mem_pct = (mem_info.rss / vmem.total) * 100
             if rss_gb >= 1:
                 self._mon_mem_var.set(f"{rss_gb:.1f} GB ({mem_pct:.1f}%)")
             else:
                 self._mon_mem_var.set(f"{rss_mb:.0f} MB ({mem_pct:.1f}%)")
             self._mon_mem_bar["value"] = min(mem_pct, 100)
 
-            # Threads
             self._mon_threads_var.set(str(proc.num_threads()))
 
-            # Uptime
-            create_time = proc.create_time()
-            uptime_sec = _time.time() - create_time
+            uptime_sec = _time.time() - proc.create_time()
             h = int(uptime_sec // 3600)
             m = int((uptime_sec % 3600) // 60)
             s = int(uptime_sec % 60)
             self._mon_uptime_var.set(f"{h:02d}:{m:02d}:{s:02d}")
 
-            # System CPU
             sys_cpu = psutil.cpu_percent()
             self._mon_sys_cpu_var.set(f"{sys_cpu:.1f}%")
             self._mon_sys_cpu_bar["value"] = min(sys_cpu, 100)
 
-            # System Memory
-            vmem = psutil.virtual_memory()
             sys_mem_used_gb = vmem.used / 1024 / 1024 / 1024
             sys_mem_total_gb = vmem.total / 1024 / 1024 / 1024
             self._mon_sys_mem_var.set(
@@ -1487,11 +1486,10 @@ class Audio2TextApp:
 
         except ImportError:
             self._mon_cpu_var.set("psutil не установлен")
-            self._mon_mem_var.set("pip install psutil")
-        except Exception as e:
-            self._mon_cpu_var.set(f"Ошибка: {e}")
+        except Exception:
+            pass
 
-        self.root.after(2000, self._monitor_update)
+        self.root.after(5000, self._monitor_update)
 
     def _build_settings_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=18)
@@ -1792,8 +1790,12 @@ class Audio2TextApp:
 
     def _log(self, text: str):
         """Пишет в все лог-виджеты на вкладках."""
+        MAX_LINES = 500
         for w in self._tab_logs:
             w.insert("end", text + "\n")
+            lines = int(w.index("end-1c").split(".")[0])
+            if lines > MAX_LINES:
+                w.delete("1.0", f"{lines - MAX_LINES}.0")
             w.see("end")
 
     def _copy_log(self, log_widget: tk.Text):
