@@ -88,23 +88,12 @@ class Audio2TextApp:
     # ── UI ─────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        # Padding вокруг текста вкладок
         style = ttk.Style()
         style.configure("TNotebook.Tab", padding=[6, 4])
 
-        notebook = ttk.Notebook(self.root)
-        notebook.pack(fill="both", expand=True, padx=8, pady=(6, 0))
-        self._main_notebook = notebook
-
-        self._build_record_tab(notebook)
-        self._build_transform_tab(notebook)
-        self._build_speakers_tab(notebook)
-        self._build_monitor_tab(notebook)
-        self._build_settings_tab(notebook)
-
-        # ── Глобальный лог внизу окна (с toggle) ──
+        # ── Лог пакуется первым снизу, чтобы notebook не вытеснял его ──
         log_bar = ttk.Frame(self.root)
-        log_bar.pack(fill="x", padx=8)
+        log_bar.pack(side="bottom", fill="x", padx=8)
 
         self._log_visible = tk.BooleanVar(value=True)
         ttk.Checkbutton(log_bar, text="Лог", variable=self._log_visible,
@@ -116,7 +105,7 @@ class Audio2TextApp:
                    command=self._clear_log).pack(side="right", padx=2)
 
         self._log_frame = ttk.Frame(self.root)
-        self._log_frame.pack(fill="both", padx=8, pady=(0, 4))
+        self._log_frame.pack(side="bottom", fill="both", padx=8, pady=(0, 4))
 
         self._global_log = tk.Text(
             self._log_frame, height=10, wrap="word", font=("Menlo", 10))
@@ -124,15 +113,25 @@ class Audio2TextApp:
         self._global_log.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         self._global_log.pack(fill="both", expand=True)
-        # Доступен для выделения/копирования, но не для ввода
         self._global_log.bind("<Key>", lambda e: "break"
                               if e.keysym not in ("c", "a") or not (e.state & 0x4)
                               else None)
         self._tab_logs.append(self._global_log)
 
+        # ── Notebook занимает оставшееся место ──
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill="both", expand=True, padx=8, pady=(6, 0))
+        self._main_notebook = notebook
+
+        self._build_record_tab(notebook)
+        self._build_transform_tab(notebook)
+        self._build_speakers_tab(notebook)
+        self._build_monitor_tab(notebook)
+        self._build_settings_tab(notebook)
+
     def _toggle_log(self):
         if self._log_visible.get():
-            self._log_frame.pack(fill="both", padx=8, pady=(0, 4))
+            self._log_frame.pack(side="bottom", fill="both", padx=8, pady=(0, 4))
         else:
             self._log_frame.pack_forget()
 
