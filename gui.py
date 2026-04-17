@@ -35,8 +35,8 @@ class Audio2TextApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("audio2text")
-        self.root.geometry("900x650")
-        self.root.minsize(880, 550)
+        self.root.geometry("900x520")
+        self.root.minsize(880, 440)
 
         # macOS native feel
         self.root.option_add("*tearOff", False)
@@ -119,7 +119,7 @@ class Audio2TextApp:
         self._log_frame.pack(fill="both", padx=8, pady=(0, 4))
 
         self._global_log = tk.Text(
-            self._log_frame, height=6, wrap="word", font=("Menlo", 10))
+            self._log_frame, height=10, wrap="word", font=("Menlo", 10))
         sb = ttk.Scrollbar(self._log_frame, command=self._global_log.yview)
         self._global_log.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
@@ -183,67 +183,66 @@ class Audio2TextApp:
     def _build_record_tab(self, notebook: ttk.Notebook):
         frame = ttk.Frame(notebook, padding=12)
         notebook.add(frame, text="Запись")
+        frame.columnconfigure(0, weight=1)
 
-        # ── Название ──
+        # Название
         name_row = ttk.Frame(frame)
-        name_row.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
-        ttk.Label(name_row, text="Название:").pack(side="left")
+        name_row.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        name_row.columnconfigure(1, weight=1)
+        ttk.Label(name_row, text="Название:").grid(row=0, column=0, sticky="w")
         self.rec_name_var = tk.StringVar(value="")
-        ttk.Entry(name_row, textvariable=self.rec_name_var).pack(
-            side="left", fill="x", expand=True, padx=(6, 0))
+        ttk.Entry(name_row, textvariable=self.rec_name_var).grid(
+            row=0, column=1, sticky="ew", padx=(6, 0))
 
-        # ── Кнопки управления ──
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=1, column=0, sticky="nw", padx=(0, 12))
+        # Кнопки управления в одну строку
+        ctrl = ttk.Frame(frame)
+        ctrl.grid(row=1, column=0, sticky="ew", pady=(0, 4))
 
-        rec_row = ttk.Frame(btn_frame)
-        rec_row.pack(pady=(0, 4), anchor="w")
         self._rec_dot_canvas = tk.Canvas(
-            rec_row, width=12, height=12,
+            ctrl, width=12, height=12,
             bg=self.root.cget("bg"), highlightthickness=0)
         self._rec_dot = self._rec_dot_canvas.create_oval(
             1, 1, 11, 11, fill="red", outline="", state="hidden")
         self._rec_dot_canvas.pack(side="left", padx=(0, 3))
         self.record_btn = ttk.Button(
-            rec_row, text="Начать запись", width=14,
+            ctrl, text="Начать запись", width=13,
             command=self._toggle_record)
         self.record_btn.pack(side="left")
-
         self.mute_btn = ttk.Button(
-            btn_frame, text="🔇 Mute", width=16,
+            ctrl, text="🔇 Mute", width=8,
             command=self._toggle_mute, state="disabled")
-        self.mute_btn.pack(pady=(0, 4), anchor="w")
+        self.mute_btn.pack(side="left", padx=(4, 0))
 
-        ttk.Button(btn_frame, text="Проверка звука", width=16,
-                   command=self._test_record_devices).pack(
-            pady=(0, 4), anchor="w")
+        ttk.Separator(ctrl, orient="vertical").pack(
+            side="left", fill="y", padx=10)
 
-        ttk.Button(btn_frame, text="Открыть папку", width=16,
+        ttk.Button(ctrl, text="Проверка звука",
+                   command=self._test_record_devices).pack(side="left")
+        ttk.Button(ctrl, text="Открыть папку",
                    command=self._open_recordings_folder).pack(
-            pady=(0, 4), anchor="w")
-
-        ttk.Button(btn_frame, text="Обработать", width=16,
+            side="left", padx=(4, 0))
+        ttk.Button(ctrl, text="Обработать",
                    command=self._run_record_pipeline).pack(
-            pady=(0, 4), anchor="w")
+            side="left", padx=(4, 0))
 
         self.record_status = ttk.Label(
-            btn_frame, text="", foreground="gray",
-            font=("Helvetica", 10))
-        self.record_status.pack(anchor="w", pady=(4, 0))
+            frame, text="", foreground="gray", font=("Helvetica", 10))
+        self.record_status.grid(row=2, column=0, sticky="w", pady=(0, 4))
 
-        # ── Устройства (сворачиваемая панель) ──
+        # Устройства (сворачиваемая панель)
         self._dev_panel_open = tk.BooleanVar(value=True)
         self._dev_toggle_btn = ttk.Button(
-            frame, text="Устройства ▾",
-            command=self._toggle_dev_panel)
-        self._dev_toggle_btn.grid(row=1, column=1, sticky="nw")
+            frame, text="Устройства ▾", command=self._toggle_dev_panel)
+        self._dev_toggle_btn.grid(row=3, column=0, sticky="w")
 
         dev_outer = ttk.LabelFrame(frame, text="")
-        dev_outer.grid(row=2, column=1, sticky="nsew", padx=(0, 0), pady=(2, 0))
+        dev_outer.grid(row=4, column=0, sticky="nsew", pady=(2, 0))
         self._dev_outer = dev_outer
+        frame.rowconfigure(4, weight=1)
 
         dev_frame = ttk.Frame(dev_outer, padding=(6, 4))
         dev_frame.pack(fill="both", expand=True)
+        dev_frame.columnconfigure(1, weight=1)
 
         # Микрофон
         self.rec_mic_enabled = tk.BooleanVar(value=True)
@@ -255,7 +254,7 @@ class Audio2TextApp:
         self.rec_mic_var = tk.StringVar(value="По умолчанию")
         self.rec_mic_combo = ttk.Combobox(
             dev_frame, textvariable=self.rec_mic_var,
-            state="readonly", width=25)
+            state="readonly", width=30)
         self.rec_mic_combo.grid(row=0, column=1, sticky="ew", padx=(5, 0))
         self.rec_mic_combo.bind("<<ComboboxSelected>>",
                                 lambda e: self._on_rec_device_change())
@@ -275,7 +274,7 @@ class Audio2TextApp:
         self.rec_sys_var = tk.StringVar(value="Не выбрано")
         self.rec_sys_combo = ttk.Combobox(
             dev_frame, textvariable=self.rec_sys_var,
-            state="readonly", width=25)
+            state="readonly", width=30)
         self.rec_sys_combo.grid(row=2, column=1, sticky="ew", padx=(5, 0))
         self.rec_sys_combo.bind("<<ComboboxSelected>>",
                                 lambda e: self._on_rec_device_change())
@@ -295,14 +294,9 @@ class Audio2TextApp:
 
         self.rec_hint_var = tk.StringVar(value="")
         ttk.Label(dev_frame, textvariable=self.rec_hint_var,
-                  wraplength=320, foreground="gray",
+                  wraplength=500, foreground="gray",
                   font=("Helvetica", 10)).grid(
             row=5, column=0, columnspan=3, sticky="w")
-
-        dev_frame.columnconfigure(1, weight=1)
-
-        frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(2, weight=1)
 
         self._refresh_all_devices()
         self._recorder = None
@@ -645,190 +639,79 @@ class Audio2TextApp:
         process_file(path, self.config)
         self.log_queue.put("Обработка завершена.")
 
-    # ── Transform tab (container) ──────────────────────────────────────
+    # ── Transform tab ──────────────────────────────────────────────────
 
     def _build_transform_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=4)
+        frame = ttk.Frame(notebook, padding=12)
         notebook.add(frame, text="Преобразование")
+        frame.columnconfigure(0, weight=1)
 
-        sub = ttk.Notebook(frame)
-        sub.pack(fill="both", expand=True)
-
-        self._build_transcribe_tab(sub)
-        self._build_diarize_tab(sub)
-        self._build_summarize_tab(sub)
-        self._build_process_tab(sub)
-
-    # ── Transcribe tab ─────────────────────────────────────────────────
-
-    def _build_transcribe_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text="Транскрибация")
-
-        ttk.Label(frame, text="Файл / папка:").grid(
-            row=0, column=0, sticky="w", pady=5)
-        self.trans_path_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=self.trans_path_var).grid(
-            row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
-
-        bf = ttk.Frame(frame)
-        bf.grid(row=0, column=2, padx=(5, 0), pady=5)
-        ttk.Button(bf, text="Файл",
+        # Файл / папка (общий для всех режимов)
+        file_row = ttk.Frame(frame)
+        file_row.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        file_row.columnconfigure(1, weight=1)
+        ttk.Label(file_row, text="Файл:").grid(row=0, column=0, sticky="w")
+        self.transform_path_var = tk.StringVar()
+        ttk.Entry(file_row, textvariable=self.transform_path_var).grid(
+            row=0, column=1, sticky="ew", padx=(6, 0))
+        bf = ttk.Frame(file_row)
+        bf.grid(row=0, column=2, padx=(4, 0))
+        ttk.Button(bf, text="Аудио",
                    command=lambda: self._pick_audio_file(
-                       self.trans_path_var)).pack(side="left", padx=1)
+                       self.transform_path_var)).pack(side="left", padx=1)
         ttk.Button(bf, text="Папка",
                    command=lambda: self._pick_dir(
-                       self.trans_path_var)).pack(side="left", padx=1)
+                       self.transform_path_var)).pack(side="left", padx=1)
+        ttk.Button(bf, text="Текст",
+                   command=self._pick_transform_text).pack(side="left", padx=1)
 
-        ttk.Label(frame, text="Язык:").grid(
-            row=1, column=0, sticky="w", pady=5)
-        self.trans_lang_var = tk.StringVar(
-            value=self.config.get(
-                "transcription", {}).get("language", "ru"))
-        ttk.Combobox(
-            frame, textvariable=self.trans_lang_var, width=10,
-            values=["ru", "en", "auto", "de", "fr",
-                    "es", "zh", "ja"]).grid(
-            row=1, column=1, sticky="w", padx=(10, 0), pady=5)
+        # Режим
+        mode_row = ttk.Frame(frame)
+        mode_row.grid(row=1, column=0, sticky="ew", pady=(0, 6))
+        ttk.Label(mode_row, text="Режим:").pack(side="left")
+        self.transform_mode_var = tk.StringVar(value="Транскрибация")
+        self._transform_combo = ttk.Combobox(
+            mode_row, textvariable=self.transform_mode_var,
+            values=["Транскрибация", "Диаризация", "Суммаризация", "Обработка"],
+            state="readonly", width=22)
+        self._transform_combo.pack(side="left", padx=(6, 0))
+        self._transform_combo.bind("<<ComboboxSelected>>",
+                                   self._on_transform_mode_change)
 
-        ttk.Label(frame, text="Backend:").grid(
-            row=2, column=0, sticky="w", pady=5)
-        self.trans_backend_var = tk.StringVar(
-            value=self.config.get(
-                "transcription", {}).get("backend", "auto"))
-        ttk.Combobox(
-            frame, textvariable=self.trans_backend_var, width=20,
-            state="readonly",
-            values=["auto", "mlx", "faster-whisper"]).grid(
-            row=2, column=1, sticky="w", padx=(10, 0), pady=5)
+        # Промпт toggle (активен только для Суммаризация)
+        prompt_row = ttk.Frame(frame)
+        prompt_row.grid(row=2, column=0, sticky="ew", pady=(0, 2))
+        self._prompt_enabled_var = tk.BooleanVar(value=False)
+        self._prompt_check = ttk.Checkbutton(
+            prompt_row, text="Промпт",
+            variable=self._prompt_enabled_var,
+            command=self._toggle_prompt_panel,
+            state="disabled")
+        self._prompt_check.pack(side="left")
 
-        ttk.Button(frame, text="Транскрибировать",
-                   command=self._run_transcribe).grid(
-            row=3, column=0, columnspan=3, pady=10)
-
-        frame.columnconfigure(1, weight=1)
-
-    def _run_transcribe(self):
-        path = self.trans_path_var.get().strip()
-        if not path:
-            messagebox.showwarning("audio2text",
-                                   "Выберите файл или папку.")
-            return
-        self._apply_transcription_overrides()
-        self._run_in_thread(self._do_transcribe, path)
-
-    def _do_transcribe(self, path: str):
-        from processor import transcribe_file, SUPPORTED_AUDIO
-        p = Path(path)
-        if p.is_file():
-            transcribe_file(str(p), self.config)
-        elif p.is_dir():
-            files = sorted(
-                f for f in p.iterdir()
-                if f.suffix.lower() in SUPPORTED_AUDIO)
-            if not files:
-                self.log_queue.put(f"Нет аудиофайлов в {p}")
-                return
-            for f in files:
-                transcribe_file(str(f), self.config)
-        self.log_queue.put("Транскрибация завершена.")
-
-    # ── Diarize tab ────────────────────────────────────────────────────
-
-    def _build_diarize_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text="Диаризация")
-
-        ttk.Label(frame, text="Файл / папка:").grid(
-            row=0, column=0, sticky="w", pady=5)
-        self.diar_path_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=self.diar_path_var).grid(
-            row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
-
-        bf = ttk.Frame(frame)
-        bf.grid(row=0, column=2, padx=(5, 0), pady=5)
-        ttk.Button(bf, text="Файл",
-                   command=lambda: self._pick_audio_file(
-                       self.diar_path_var)).pack(side="left", padx=1)
-        ttk.Button(bf, text="Папка",
-                   command=lambda: self._pick_dir(
-                       self.diar_path_var)).pack(side="left", padx=1)
-
-        ttk.Button(frame, text="Диаризовать",
-                   command=self._run_diarize).grid(
-            row=1, column=0, columnspan=3, pady=10)
-
-        frame.columnconfigure(1, weight=1)
-
-    def _run_diarize(self):
-        path = self.diar_path_var.get().strip()
-        if not path:
-            messagebox.showwarning("audio2text",
-                                   "Выберите файл или папку.")
-            return
-        self._run_in_thread(self._do_diarize, path)
-
-    def _do_diarize(self, path: str):
-        from processor import diarize_file, transcribe_file, SUPPORTED_AUDIO
-        p = Path(path)
-        files = ([p] if p.is_file() else sorted(
-            f for f in p.iterdir()
-            if f.suffix.lower() in SUPPORTED_AUDIO))
-        for f in files:
-            result = transcribe_file(str(f), self.config)
-            diarize_file(str(f), self.config, transcription=result)
-        self.log_queue.put("Диаризация завершена.")
-
-    # ── Summarize tab ────────────────────────────────────────────────
-
-    def _build_summarize_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text="Суммаризация")
-
-        # Файл
-        top = ttk.Frame(frame)
-        top.grid(row=0, column=0, sticky="ew")
-
-        ttk.Label(top, text="Файл:").pack(side="left")
-        self.sum_path_var = tk.StringVar()
-        ttk.Entry(top, textvariable=self.sum_path_var).pack(
-            side="left", fill="x", expand=True, padx=(8, 0))
-        ttk.Button(top, text="Выбрать",
-                   command=self._pick_text_file).pack(
-            side="left", padx=(4, 0))
-
-        # Превью файла
-        ttk.Label(frame, text="Превью файла:").grid(
-            row=1, column=0, sticky="w", pady=(8, 2))
-
-        preview_frame = ttk.Frame(frame)
-        preview_frame.grid(row=2, column=0, sticky="nsew")
-
-        self.sum_input = tk.Text(
-            preview_frame, height=6, wrap="word",
-            font=("Menlo", 10))
-        sb_in = ttk.Scrollbar(preview_frame, command=self.sum_input.yview)
-        self.sum_input.configure(yscrollcommand=sb_in.set)
-        sb_in.pack(side="right", fill="y")
-        self.sum_input.pack(fill="both", expand=True)
-
-        # Промпт (редактируемый)
-        ttk.Label(frame, text="Промпт (можно редактировать):").grid(
-            row=3, column=0, sticky="w", pady=(8, 2))
-
-        prompt_frame = ttk.Frame(frame)
-        prompt_frame.grid(row=4, column=0, sticky="nsew")
-
+        # Промпт (скрыт по умолчанию)
+        self._prompt_frame = ttk.Frame(frame)
         self.sum_prompt = tk.Text(
-            prompt_frame, height=8, wrap="word",
-            font=("Menlo", 10))
-        sb_prompt = ttk.Scrollbar(prompt_frame, command=self.sum_prompt.yview)
-        self.sum_prompt.configure(yscrollcommand=sb_prompt.set)
-        sb_prompt.pack(side="right", fill="y")
+            self._prompt_frame, height=8, wrap="word", font=("Menlo", 10))
+        sb_p = ttk.Scrollbar(self._prompt_frame, command=self.sum_prompt.yview)
+        self.sum_prompt.configure(yscrollcommand=sb_p.set)
+        sb_p.pack(side="right", fill="y")
         self.sum_prompt.pack(fill="both", expand=True)
+        self.sum_prompt.insert("1.0", self._default_summary_prompt())
 
-        # Заполняем дефолтным промптом
-        default_prompt = (
+        # Кнопки
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=4, column=0, sticky="w", pady=(8, 0))
+        ttk.Button(btn_row, text="Запустить",
+                   command=self._run_transform).pack(side="left")
+        self._process_new_btn = ttk.Button(
+            btn_row, text="Обработать новые",
+            command=lambda: self._run_in_thread(self._do_process_new))
+
+        frame.rowconfigure(3, weight=1)
+
+    def _default_summary_prompt(self) -> str:
+        return (
             "Ниже транскрипция рабочей встречи. "
             "Напиши подробное структурированное резюме на русском языке "
             "в формате Markdown. Важно: раскрывай каждый пункт детально — "
@@ -847,63 +730,109 @@ class Audio2TextApp:
             "## Открытые вопросы\n- вопрос, который остался без решения\n\n"
             "Транскрипция:\n"
         )
-        self.sum_prompt.insert("1.0", default_prompt)
 
-        # Кнопка
-        ttk.Button(frame, text="Суммаризировать",
-                   command=self._run_summarize).grid(
-            row=5, column=0, pady=8)
+    def _on_transform_mode_change(self, event=None):
+        mode = self.transform_mode_var.get()
+        is_sum = mode == "Суммаризация"
+        is_proc = mode == "Обработка"
 
-        frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(2, weight=1)
-        frame.rowconfigure(4, weight=1)
+        self._prompt_check.configure(state="normal" if is_sum else "disabled")
+        self._prompt_enabled_var.set(is_sum)
+        self._toggle_prompt_panel()
 
-    def _pick_text_file(self):
+        if is_proc:
+            self._process_new_btn.pack(side="left", padx=(6, 0))
+        else:
+            self._process_new_btn.pack_forget()
+
+    def _toggle_prompt_panel(self):
+        if self._prompt_enabled_var.get():
+            self._prompt_frame.grid(row=3, column=0, sticky="nsew", pady=(2, 0))
+        else:
+            self._prompt_frame.grid_remove()
+
+    def _pick_transform_text(self):
         path = filedialog.askopenfilename(
             title="Выберите текстовый файл",
             filetypes=[("Текст", "*.txt"), ("Все файлы", "*.*")])
         if path:
-            self.sum_path_var.set(path)
-            self._load_text_file()
+            self.transform_path_var.set(path)
 
-    def _load_text_file(self):
-        path = self.sum_path_var.get().strip()
+    def _run_transform(self):
+        path = self.transform_path_var.get().strip()
         if not path:
+            messagebox.showwarning("audio2text", "Выберите файл или папку.")
             return
+        mode = self.transform_mode_var.get()
+        self._apply_transcription_overrides()
+        if mode == "Транскрибация":
+            self._run_in_thread(self._do_transcribe, path)
+        elif mode == "Диаризация":
+            self._run_in_thread(self._do_diarize, path)
+        elif mode == "Суммаризация":
+            self._run_in_thread(self._do_summarize_file, path)
+        elif mode == "Обработка":
+            self._run_in_thread(self._do_process, path)
+
+    def _do_transcribe(self, path: str):
+        from processor import transcribe_file, SUPPORTED_AUDIO
+        p = Path(path)
+        if p.is_file():
+            transcribe_file(str(p), self.config)
+        elif p.is_dir():
+            files = sorted(
+                f for f in p.iterdir()
+                if f.suffix.lower() in SUPPORTED_AUDIO)
+            if not files:
+                self.log_queue.put(f"Нет аудиофайлов в {p}")
+                return
+            for f in files:
+                transcribe_file(str(f), self.config)
+        self.log_queue.put("Транскрибация завершена.")
+
+    def _do_diarize(self, path: str):
+        from processor import diarize_file, transcribe_file, SUPPORTED_AUDIO
+        p = Path(path)
+        files = ([p] if p.is_file() else sorted(
+            f for f in p.iterdir()
+            if f.suffix.lower() in SUPPORTED_AUDIO))
+        for f in files:
+            result = transcribe_file(str(f), self.config)
+            diarize_file(str(f), self.config, transcription=result)
+        self.log_queue.put("Диаризация завершена.")
+
+    def _do_summarize_file(self, path: str):
+        p = Path(path)
+        if p.suffix.lower() in SUPPORTED_AUDIO:
+            for suf in ("_diar", "_timed", ""):
+                candidate = p.parent / f"{p.stem}{suf}.txt"
+                if candidate.exists():
+                    p = candidate
+                    break
+            else:
+                self.log_queue.put(f"Транскрипция не найдена для {p.name}")
+                return
         try:
-            text = Path(path).read_text(encoding="utf-8")
-            self.sum_input.delete("1.0", "end")
-            self.sum_input.insert("1.0", text)
-            self._log(f"Загружено: {Path(path).name} "
-                      f"({len(text)} символов)")
+            text = p.read_text(encoding="utf-8")
         except Exception as e:
-            self._log(f"Ошибка чтения: {e}")
-
-    def _run_summarize(self):
-        text = self.sum_input.get("1.0", "end").strip()
-        if not text:
-            messagebox.showwarning("audio2text",
-                                   "Загрузите текстовый файл.")
+            self.log_queue.put(f"Ошибка чтения: {e}")
             return
-
+        self._log(f"Загружено: {p.name} ({len(text)} символов)")
         prompt_template = self.sum_prompt.get("1.0", "end").strip()
         if not prompt_template:
-            messagebox.showwarning("audio2text",
-                                   "Промпт не может быть пустым.")
+            self.log_queue.put("Промпт пустой — включите галочку Промпт")
             return
+        self._do_summarize(text, prompt_template, src_path=str(p))
 
-        self._run_in_thread(self._do_summarize, text, prompt_template)
-
-    def _do_summarize(self, text: str, prompt_template: str):
+    def _do_summarize(self, text: str, prompt_template: str,
+                      src_path: str = ""):
         cfg = self.config
         llm_cfg = cfg.get("llm", {})
         sum_cfg = cfg.get("summarization", {})
-
         try:
             if llm_cfg.get("enabled"):
                 from summariser import LLMSummarizer, _clean_transcript
                 s = LLMSummarizer(cfg)
-                # Используем промпт из GUI вместо встроенного
                 clean_text = _clean_transcript(text)
                 full_prompt = prompt_template + "\n" + clean_text
                 result = s._call_llm(full_prompt)
@@ -913,34 +842,26 @@ class Audio2TextApp:
                 result = s.summarize(text)
             else:
                 self.log_queue.put(
-                    "Суммаризация отключена. Включите LLM или "
-                    "Summarization в Настройках / config.yaml")
+                    "Суммаризация отключена. Включите LLM в Настройках.")
                 return
 
-            # Сохранить в файл рядом с исходным
             saved = ""
-            src = self.sum_path_var.get().strip()
-            if src:
-                p = Path(src)
+            if src_path:
+                p = Path(src_path)
                 out = p.parent / f"{p.stem}_summary.txt"
                 out.write_text(result, encoding="utf-8")
-                saved = f" → {out}"
+                saved = f" → {out.name}"
 
             self.log_queue.put(
-                f"Суммаризация завершена "
-                f"({len(result)} символов){saved}")
+                f"Суммаризация завершена ({len(result)} символов){saved}")
 
-            # Экспорт в Obsidian
             obs_cfg = cfg.get("obsidian", {})
-            if obs_cfg.get("enabled") and result and src:
+            if obs_cfg.get("enabled") and result and src_path:
                 try:
                     from processor import export_obsidian_note
-                    # Ищем аудиофайл рядом с текстовым
-                    from processor import SUPPORTED_AUDIO
-                    p = Path(src)
+                    p = Path(src_path)
                     audio_path = None
                     for ext in SUPPORTED_AUDIO:
-                        # Убираем суффиксы _diar, _timed из имени
                         stem = p.stem
                         for suffix in ("_diar", "_timed", "_summary"):
                             stem = stem.removesuffix(suffix)
@@ -957,58 +878,8 @@ class Audio2TextApp:
                             "Obsidian: аудиофайл не найден рядом с текстом")
                 except Exception as e:
                     self.log_queue.put(f"Ошибка Obsidian: {e}")
-
         except Exception as e:
             self.log_queue.put(f"Ошибка суммаризации: {e}")
-
-    # ── Process tab ────────────────────────────────────────────────────
-
-    def _build_process_tab(self, notebook: ttk.Notebook):
-        frame = ttk.Frame(notebook, padding=18)
-        notebook.add(frame, text="Обработка")
-
-        ttk.Label(frame, text="Файл / папка:").grid(
-            row=0, column=0, sticky="w", pady=5)
-        self.proc_path_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=self.proc_path_var).grid(
-            row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
-
-        bf = ttk.Frame(frame)
-        bf.grid(row=0, column=2, padx=(5, 0), pady=5)
-        ttk.Button(bf, text="Файл",
-                   command=lambda: self._pick_audio_file(
-                       self.proc_path_var)).pack(side="left", padx=1)
-        ttk.Button(bf, text="Папка",
-                   command=lambda: self._pick_dir(
-                       self.proc_path_var)).pack(side="left", padx=1)
-
-        ttk.Label(
-            frame,
-            text="Полный процесс: транскрибация → диаризация "
-                 "→ суммаризация → Obsidian.\n"
-                 "Настройки берутся из вкладки Настройки и config.yaml.",
-            wraplength=500, justify="left",
-            foreground="gray", font=("Helvetica", 10)).grid(
-            row=1, column=0, columnspan=3, sticky="w", pady=(10, 0))
-
-        btn_row = ttk.Frame(frame)
-        btn_row.grid(row=2, column=0, columnspan=3, pady=15)
-
-        ttk.Button(btn_row, text="Запустить обработку",
-                   command=self._run_process).pack(side="left", padx=5)
-        ttk.Button(btn_row, text="Обработать новые",
-                   command=self._run_process_new).pack(side="left", padx=5)
-
-        frame.columnconfigure(1, weight=1)
-
-    def _run_process(self):
-        path = self.proc_path_var.get().strip()
-        if not path:
-            messagebox.showwarning("audio2text",
-                                   "Выберите файл или папку.")
-            return
-        self._apply_transcription_overrides()
-        self._run_in_thread(self._do_process, path)
 
     def _do_process(self, path: str):
         from processor import process_file, process_directory
@@ -1018,10 +889,6 @@ class Audio2TextApp:
         elif p.is_dir():
             process_directory(str(p), self.config)
         self.log_queue.put("Обработка завершена.")
-
-    def _run_process_new(self):
-        self._apply_transcription_overrides()
-        self._run_in_thread(self._do_process_new)
 
     def _do_process_new(self):
         from processor import process_new
@@ -1247,6 +1114,10 @@ class Audio2TextApp:
         canvas.pack(side="left", fill="both", expand=True)
         canvas.bind("<Configure>",
                     lambda e: canvas.itemconfig(win_id, width=e.width))
+        canvas.bind("<Enter>", lambda e: canvas.bind_all(
+            "<MouseWheel>",
+            lambda ev: canvas.yview_scroll(-1 if ev.delta > 0 else 1, "units")))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
 
         row = 0
         cfg_t = self.config.get("transcription", {})
@@ -1444,14 +1315,6 @@ class Audio2TextApp:
 
     def _apply_transcription_overrides(self):
         cfg_t = self.config.setdefault("transcription", {})
-        if hasattr(self, "trans_lang_var"):
-            lang = self.trans_lang_var.get()
-            if lang:
-                cfg_t["language"] = lang
-        if hasattr(self, "trans_backend_var"):
-            be = self.trans_backend_var.get()
-            if be:
-                cfg_t["backend"] = be
         if hasattr(self, "set_backend_var"):
             cfg_t["backend"] = self.set_backend_var.get()
             cfg_t["mlx_model"] = self.set_mlx_model_var.get()
