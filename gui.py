@@ -35,8 +35,8 @@ class Audio2TextApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("audio2text")
-        self.root.geometry("900x520")
-        self.root.minsize(880, 440)
+        self.root.geometry("460x520")
+        self.root.minsize(420, 440)
 
         # macOS native feel
         self.root.option_add("*tearOff", False)
@@ -193,40 +193,41 @@ class Audio2TextApp:
         ttk.Entry(name_row, textvariable=self.rec_name_var).grid(
             row=0, column=1, sticky="ew", padx=(6, 0))
 
-        # Кнопки управления в одну строку
-        ctrl = ttk.Frame(frame)
-        ctrl.grid(row=1, column=0, sticky="ew", pady=(0, 4))
+        # Кнопки в одну колонку
+        btn_col = ttk.Frame(frame)
+        btn_col.grid(row=1, column=0, sticky="w", pady=(0, 4))
 
+        rec_row = ttk.Frame(btn_col)
+        rec_row.pack(anchor="w", pady=(0, 3))
         self._rec_dot_canvas = tk.Canvas(
-            ctrl, width=12, height=12,
+            rec_row, width=12, height=12,
             bg=self.root.cget("bg"), highlightthickness=0)
         self._rec_dot = self._rec_dot_canvas.create_oval(
             1, 1, 11, 11, fill="red", outline="", state="hidden")
         self._rec_dot_canvas.pack(side="left", padx=(0, 3))
         self.record_btn = ttk.Button(
-            ctrl, text="Начать запись", width=13,
+            rec_row, text="Начать запись", width=16,
             command=self._toggle_record)
         self.record_btn.pack(side="left")
+
         self.mute_btn = ttk.Button(
-            ctrl, text="🔇 Mute", width=8,
+            btn_col, text="🔇 Mute", width=16,
             command=self._toggle_mute, state="disabled")
-        self.mute_btn.pack(side="left", padx=(4, 0))
+        self.mute_btn.pack(anchor="w", pady=(0, 3))
 
-        ttk.Separator(ctrl, orient="vertical").pack(
-            side="left", fill="y", padx=10)
-
-        ttk.Button(ctrl, text="Проверка звука",
-                   command=self._test_record_devices).pack(side="left")
-        ttk.Button(ctrl, text="Открыть папку",
+        ttk.Button(btn_col, text="Проверка звука", width=16,
+                   command=self._test_record_devices).pack(
+            anchor="w", pady=(0, 3))
+        ttk.Button(btn_col, text="Открыть папку", width=16,
                    command=self._open_recordings_folder).pack(
-            side="left", padx=(4, 0))
-        ttk.Button(ctrl, text="Обработать",
+            anchor="w", pady=(0, 3))
+        ttk.Button(btn_col, text="Обработать", width=16,
                    command=self._run_record_pipeline).pack(
-            side="left", padx=(4, 0))
+            anchor="w", pady=(0, 3))
 
         self.record_status = ttk.Label(
-            frame, text="", foreground="gray", font=("Helvetica", 10))
-        self.record_status.grid(row=2, column=0, sticky="w", pady=(0, 4))
+            btn_col, text="", foreground="gray", font=("Helvetica", 10))
+        self.record_status.pack(anchor="w", pady=(2, 0))
 
         # Устройства (сворачиваемая панель)
         self._dev_panel_open = tk.BooleanVar(value=True)
@@ -976,62 +977,31 @@ class Audio2TextApp:
         frame = ttk.Frame(notebook, padding=12)
         notebook.add(frame, text="Мониторинг")
 
-        frame.columnconfigure(1, weight=1)
+        def row(r, label, var_name):
+            ttk.Label(frame, text=label).grid(row=r, column=0, sticky="w", pady=3)
+            v = tk.StringVar(value="—")
+            setattr(self, var_name, v)
+            ttk.Label(frame, textvariable=v, font=("Menlo", 11)).grid(
+                row=r, column=1, sticky="w", padx=12)
 
-        # Заголовок
-        ttk.Label(frame, text="Ресурсы процесса audio2text",
-                  font=("", 13, "bold")).grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        ttk.Label(frame, text="Процесс audio2text",
+                  font=("", 12, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
 
-        # CPU
-        ttk.Label(frame, text="CPU:").grid(row=1, column=0, sticky="w", pady=3)
-        self._mon_cpu_var = tk.StringVar(value="—")
-        ttk.Label(frame, textvariable=self._mon_cpu_var).grid(
-            row=1, column=1, sticky="w", padx=6)
-        self._mon_cpu_bar = ttk.Progressbar(frame, length=300, maximum=100)
-        self._mon_cpu_bar.grid(row=1, column=2, sticky="ew", padx=(0, 6))
+        row(1, "CPU:",          "_mon_cpu_var")
+        row(2, "RAM:",          "_mon_mem_var")
+        row(3, "Потоки:",       "_mon_threads_var")
+        row(4, "Время работы:", "_mon_uptime_var")
 
-        # Memory RSS
-        ttk.Label(frame, text="RAM:").grid(row=2, column=0, sticky="w", pady=3)
-        self._mon_mem_var = tk.StringVar(value="—")
-        ttk.Label(frame, textvariable=self._mon_mem_var).grid(
-            row=2, column=1, sticky="w", padx=6)
-        self._mon_mem_bar = ttk.Progressbar(frame, length=300, maximum=100)
-        self._mon_mem_bar.grid(row=2, column=2, sticky="ew", padx=(0, 6))
-
-        # Threads
-        ttk.Label(frame, text="Потоки:").grid(row=3, column=0, sticky="w", pady=3)
-        self._mon_threads_var = tk.StringVar(value="—")
-        ttk.Label(frame, textvariable=self._mon_threads_var).grid(
-            row=3, column=1, sticky="w", padx=6)
-
-        # Uptime
-        ttk.Label(frame, text="Время работы:").grid(row=4, column=0, sticky="w", pady=3)
-        self._mon_uptime_var = tk.StringVar(value="—")
-        ttk.Label(frame, textvariable=self._mon_uptime_var).grid(
-            row=4, column=1, sticky="w", padx=6)
-
-        # System total
         ttk.Separator(frame).grid(
-            row=5, column=0, columnspan=3, sticky="ew", pady=8)
-        ttk.Label(frame, text="Система", font=("", 12, "bold")).grid(
-            row=6, column=0, columnspan=3, sticky="w", pady=(0, 6))
+            row=5, column=0, columnspan=2, sticky="ew", pady=8)
+        ttk.Label(frame, text="Система",
+                  font=("", 12, "bold")).grid(
+            row=6, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
-        ttk.Label(frame, text="CPU (система):").grid(row=7, column=0, sticky="w", pady=3)
-        self._mon_sys_cpu_var = tk.StringVar(value="—")
-        ttk.Label(frame, textvariable=self._mon_sys_cpu_var).grid(
-            row=7, column=1, sticky="w", padx=6)
-        self._mon_sys_cpu_bar = ttk.Progressbar(frame, length=300, maximum=100)
-        self._mon_sys_cpu_bar.grid(row=7, column=2, sticky="ew", padx=(0, 6))
+        row(7, "CPU:",  "_mon_sys_cpu_var")
+        row(8, "RAM:",  "_mon_sys_mem_var")
 
-        ttk.Label(frame, text="RAM (система):").grid(row=8, column=0, sticky="w", pady=3)
-        self._mon_sys_mem_var = tk.StringVar(value="—")
-        ttk.Label(frame, textvariable=self._mon_sys_mem_var).grid(
-            row=8, column=1, sticky="w", padx=6)
-        self._mon_sys_mem_bar = ttk.Progressbar(frame, length=300, maximum=100)
-        self._mon_sys_mem_bar.grid(row=8, column=2, sticky="ew", padx=(0, 6))
-
-        # Запуск обновления
         self._mon_process = None
         self._monitor_update()
 
@@ -1058,7 +1028,6 @@ class Audio2TextApp:
 
             cpu_pct = proc.cpu_percent()
             self._mon_cpu_var.set(f"{cpu_pct:.1f}%")
-            self._mon_cpu_bar["value"] = min(cpu_pct, 100)
 
             mem_info = proc.memory_info()
             rss_mb = mem_info.rss / 1024 / 1024
@@ -1069,7 +1038,6 @@ class Audio2TextApp:
                 self._mon_mem_var.set(f"{rss_gb:.1f} GB ({mem_pct:.1f}%)")
             else:
                 self._mon_mem_var.set(f"{rss_mb:.0f} MB ({mem_pct:.1f}%)")
-            self._mon_mem_bar["value"] = min(mem_pct, 100)
 
             self._mon_threads_var.set(str(proc.num_threads()))
 
@@ -1081,13 +1049,11 @@ class Audio2TextApp:
 
             sys_cpu = psutil.cpu_percent()
             self._mon_sys_cpu_var.set(f"{sys_cpu:.1f}%")
-            self._mon_sys_cpu_bar["value"] = min(sys_cpu, 100)
 
             sys_mem_used_gb = vmem.used / 1024 / 1024 / 1024
             sys_mem_total_gb = vmem.total / 1024 / 1024 / 1024
             self._mon_sys_mem_var.set(
                 f"{sys_mem_used_gb:.1f} / {sys_mem_total_gb:.1f} GB ({vmem.percent}%)")
-            self._mon_sys_mem_bar["value"] = vmem.percent
 
         except ImportError:
             self._mon_cpu_var.set("psutil не установлен")
