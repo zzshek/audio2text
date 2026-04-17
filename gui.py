@@ -35,8 +35,8 @@ class Audio2TextApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("audio2text")
-        self.root.geometry("460x520")
-        self.root.minsize(420, 440)
+        self.root.geometry("700x520")
+        self.root.minsize(600, 440)
 
         # macOS native feel
         self.root.option_add("*tearOff", False)
@@ -91,19 +91,7 @@ class Audio2TextApp:
         style = ttk.Style()
         style.configure("TNotebook.Tab", padding=[6, 4])
 
-        # ── Лог пакуется первым снизу, чтобы notebook не вытеснял его ──
-        log_bar = ttk.Frame(self.root)
-        log_bar.pack(side="bottom", fill="x", padx=8)
-
-        self._log_visible = tk.BooleanVar(value=True)
-        ttk.Checkbutton(log_bar, text="Лог", variable=self._log_visible,
-                        command=self._toggle_log).pack(side="left")
-        ttk.Button(log_bar, text="⧉", width=2,
-                   command=lambda: self._copy_log(self._global_log)).pack(
-            side="right", padx=2)
-        ttk.Button(log_bar, text="Очистить", width=8,
-                   command=self._clear_log).pack(side="right", padx=2)
-
+        # ── Лог: сначала текстовый фрейм (самый низ), потом бар над ним ──
         self._log_frame = ttk.Frame(self.root)
         self._log_frame.pack(side="bottom", fill="both", padx=8, pady=(0, 4))
 
@@ -117,6 +105,19 @@ class Audio2TextApp:
                               if e.keysym not in ("c", "a") or not (e.state & 0x4)
                               else None)
         self._tab_logs.append(self._global_log)
+
+        # Бар с кнопками — над фреймом лога (всегда виден)
+        log_bar = ttk.Frame(self.root)
+        log_bar.pack(side="bottom", fill="x", padx=8, pady=(2, 0))
+
+        self._log_visible = tk.BooleanVar(value=True)
+        ttk.Checkbutton(log_bar, text="Лог", variable=self._log_visible,
+                        command=self._toggle_log).pack(side="left")
+        ttk.Button(log_bar, text="⧉", width=2,
+                   command=lambda: self._copy_log(self._global_log)).pack(
+            side="right", padx=2)
+        ttk.Button(log_bar, text="Очистить", width=8,
+                   command=self._clear_log).pack(side="right", padx=2)
 
         # ── Notebook занимает оставшееся место ──
         notebook = ttk.Notebook(self.root)
